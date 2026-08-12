@@ -24,7 +24,6 @@ def seed_categories_for_user(db: Session, user_id: int) -> None:
                 updated_at=now,
             )
         )
-    db.commit()
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -34,9 +33,10 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
     user = User(email=payload.email, password_hash=hash_password(payload.password))
     db.add(user)
+    db.flush()
+    seed_categories_for_user(db, user.id)
     db.commit()
     db.refresh(user)
-    seed_categories_for_user(db, user.id)
     return {"id": user.id, "email": user.email}
 
 

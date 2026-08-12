@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -38,7 +39,14 @@ def create_category(
         updated_at=datetime.now(timezone.utc),
     )
     db.add(category)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="client_id already exists for this user",
+        ) from None
     db.refresh(category)
     return category
 
@@ -61,7 +69,14 @@ def update_category(
     for key, value in data.items():
         setattr(category, key, value)
     category.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="client_id already exists for this user",
+        ) from None
     db.refresh(category)
     return category
 
