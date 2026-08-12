@@ -2,6 +2,7 @@ package com.yuwhisper.account
 
 import android.app.Application
 import android.util.Log
+import com.yuwhisper.account.capture.PendingPaymentNotifier
 import com.yuwhisper.account.data.LedgerRepository
 import com.yuwhisper.account.data.local.AppDatabase
 import com.yuwhisper.account.data.local.seedIfEmpty
@@ -37,6 +38,7 @@ class AccountApp : Application() {
             database = database,
             ensureSeeded = { ensureSeeded() },
         )
+        PendingPaymentNotifier.ensureChannel(this)
         // Warm up seed in background; callers must still await ensureSeeded().
         seedDeferred.start()
     }

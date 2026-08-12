@@ -2,7 +2,9 @@ package com.yuwhisper.account.data
 
 import com.yuwhisper.account.data.local.AppDatabase
 import com.yuwhisper.account.data.local.entity.CategoryEntity
+import com.yuwhisper.account.data.local.entity.PendingPaymentEntity
 import com.yuwhisper.account.data.local.entity.TransactionEntity
+import com.yuwhisper.account.domain.Candidate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -25,6 +27,7 @@ class LedgerRepository(
 ) {
     private val transactionDao get() = database.transactionDao()
     private val categoryDao get() = database.categoryDao()
+    private val pendingPaymentDao get() = database.pendingPaymentDao()
 
     fun observeTransactions(): Flow<List<TransactionEntity>> = flow {
         ensureSeeded()
@@ -104,6 +107,58 @@ class LedgerRepository(
         categoryDao.deleteByLocalId(localId)
     }
 
+    /** Pending + booked candidates for [com.yuwhisper.account.domain.Dedupe]. */
+    suspend fun listDedupeCandidates(): List<Candidate> {
+        ensureSeeded()
+        val fromPending = pendingPaymentDao.getAll().map { it.toCandidate() }
+        val fromTx = transactionDao.getAll().map { it.toCandidate() }
+        return fromPending + fromTx
+    }
+
+    suspend fun insertPendingPayment(entity: PendingPaymentEntity): Long {
+        ensureSeeded()
+        return pendingPaymentDao.insert(entity)
+    }
+
+    suspend fun getPendingPayment(localId: Long): PendingPaymentEntity? {
+        ensureSeeded()
+        return pendingPaymentDao.getById(localId)
+    }
+
+    /**
+     * Confirm a pending payment into an expense transaction, then delete the pending row.
+     * Category is required.
+     */
+    suspend fun confirmPendingPayment(
+        pendingLocalId: Long,
+        amountCents: Long,
+        merchant: String,
+        categoryLocalId: Long,
+        note: String,
+    ) {
+        ensureSeeded()
+        require(amountCents >= 0) { "amountCents must be >= 0" }
+        require(categoryLocalId > 0) { "category required" }
+        val pending = pendingPaymentDao.getById(pendingLocalId)
+            ?: error("pending not found: $pendingLocalId")
+        val now = Instant.now()
+        transactionDao.insert(
+            TransactionEntity(
+                clientId = UUID.randomUUID().toString(),
+                amountCents = amountCents,
+                merchant = merchant.trim(),
+                source = pending.source.ifBlank { SOURCE_MANUAL },
+                categoryLocalId = categoryLocalId,
+                note = note.trim(),
+                occurredAt = pending.occurredAt ?: pending.createdAt,
+                updatedAt = now,
+                type = TYPE_EXPENSE,
+                pendingSync = true,
+            ),
+        )
+        pendingPaymentDao.deleteByLocalId(pendingLocalId)
+    }
+
     /**
      * Writes UTF-8 CSV with header:
      * `occurred_at,type,amount,merchant,source,category,note`
@@ -153,3 +208,17 @@ class LedgerRepository(
         }
     }
 }
+
+private fun PendingPaymentEntity.toCandidate(): Candidate = Candidate(
+    source = source,
+    amountCents = (amountCents ?: 0).toInt(),
+    merchant = merchant,
+    occurredAt = occurredAt ?: createdAt,
+)
+
+private fun TransactionEntity.toCandidate(): Candidate = Candidate(
+    source = source,
+    amountCents = amountCents.toInt().coerceAtLeast(0),
+    merchant = merchant,
+    occurredAt = occurredAt,
+)
