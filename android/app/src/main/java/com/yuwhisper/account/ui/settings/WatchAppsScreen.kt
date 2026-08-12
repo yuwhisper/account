@@ -71,7 +71,7 @@ fun WatchAppsScreen(
         ) {
             item {
                 Text(
-                    "开启后，将监听对应 App 的付款通知并弹出确认入账卡。",
+                    "开启后，将监听对应 App 的付款通知与付款成功页（无障碍），并弹出确认入账卡。",
                     color = AccountMutedColor,
                     style = MaterialTheme.typography.bodySmall,
                 )

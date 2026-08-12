@@ -22,6 +22,15 @@ data class ParsedPayment(
  */
 object PaymentParser {
 
+    private val SUCCESS_HINTS = listOf(
+        "支付成功",
+        "付款成功",
+        "交易成功",
+        "支付完成",
+        "已支付",
+        "收款成功",
+    )
+
     private val AMOUNT_PATTERNS = listOf(
         Regex("""支付金额[：:]\s*[¥￥]\s*([\d,]+(?:\.\d{1,2})?)"""),
         Regex("""金额[：:]\s*[¥￥]\s*([\d,]+(?:\.\d{1,2})?)"""),
@@ -51,8 +60,39 @@ object PaymentParser {
         return when (packageName) {
             DefaultWatchApps.WECHAT -> parseWechat(raw)
             DefaultWatchApps.ALIPAY -> parseAlipay(raw)
-            else -> null
+            else -> parseGeneric(packageName, raw)
         }
+    }
+
+    /**
+     * Accessibility channel: scan collected node texts for amount / merchant.
+     * Rules are intentionally simple and may drift when payment Apps change UI.
+     */
+    fun parseAccessibility(packageName: String, texts: List<String>): ParsedPayment? {
+        val blob = texts.joinToString("\n")
+        if (blob.isBlank()) return null
+        return parse(packageName, title = "", text = blob)
+    }
+
+    fun looksLikePaymentSuccess(blob: String): Boolean =
+        SUCCESS_HINTS.any { blob.contains(it) }
+
+    private fun parseGeneric(packageName: String, raw: ParsedRaw): ParsedPayment? {
+        val blob = listOf(raw.title, raw.text).joinToString("\n")
+        val amountCents = extractAmountCents(blob) ?: return null
+        val merchant = extractMerchant(
+            blob,
+            WECHAT_MERCHANT_PATTERNS + ALIPAY_MERCHANT_PATTERNS,
+        ).orEmpty()
+        val source = when (packageName) {
+            DefaultWatchApps.UNIONPAY -> "unionpay"
+            else -> packageName.substringAfterLast('.').ifBlank { "other" }
+        }
+        return ParsedPayment(
+            amountCents = amountCents,
+            merchant = merchant,
+            source = source,
+        )
     }
 
     private fun parseFields(

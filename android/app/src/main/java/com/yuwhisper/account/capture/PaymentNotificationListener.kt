@@ -16,8 +16,19 @@ import java.time.Instant
  */
 class PaymentNotificationListener : NotificationListenerService() {
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        AutoBookkeepingStatusService.refresh(applicationContext)
+    }
+
+    override fun onListenerDisconnected() {
+        AutoBookkeepingStatusService.refresh(applicationContext)
+        super.onListenerDisconnected()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
+        if (!AutoBookkeepingPrefs.isMasterEnabled(this)) return
         val packageName = sbn.packageName ?: return
         if (packageName == applicationContext.packageName) {
             // Ignore our own pending / status notifications.

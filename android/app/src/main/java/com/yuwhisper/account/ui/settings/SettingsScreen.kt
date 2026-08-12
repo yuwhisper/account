@@ -4,10 +4,12 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,17 +22,29 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.yuwhisper.account.capture.AutoBookkeepingPrefs
+import com.yuwhisper.account.capture.AutoBookkeepingStatusService
+import com.yuwhisper.account.capture.CaptureAvailability
 import com.yuwhisper.account.capture.ConfirmDispatcher
 import com.yuwhisper.account.domain.Candidate
 import com.yuwhisper.account.ui.theme.AccountMutedColor
@@ -49,12 +63,40 @@ fun SettingsScreen(
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    var masterEnabled by remember {
+        mutableStateOf(AutoBookkeepingPrefs.isMasterEnabled(context))
+    }
+    var notificationListenerOn by remember {
+        mutableStateOf(CaptureAvailability.isNotificationListenerEnabled(context))
+    }
+    var accessibilityOn by remember {
+        mutableStateOf(CaptureAvailability.isAccessibilityEnabled(context))
+    }
+
+    fun refreshChannelStatus() {
+        notificationListenerOn = CaptureAvailability.isNotificationListenerEnabled(context)
+        accessibilityOn = CaptureAvailability.isAccessibilityEnabled(context)
+        AutoBookkeepingStatusService.refresh(context)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                masterEnabled = AutoBookkeepingPrefs.isMasterEnabled(context)
+                refreshChannelStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { /* optional; simulate still works via Activity */ }
 
-    fun simulatePayment() {
+    fun ensurePostNotifications() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ContextCompat.checkSelfPermission(
                 context,
@@ -64,6 +106,24 @@ fun SettingsScreen(
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+    }
+
+    fun setMasterEnabled(enabled: Boolean) {
+        AutoBookkeepingPrefs.setMasterEnabled(context, enabled)
+        masterEnabled = enabled
+        if (enabled) {
+            ensurePostNotifications()
+        }
+        AutoBookkeepingStatusService.refresh(context)
+        scope.launch {
+            snackbar.showSnackbar(
+                if (enabled) "已开启自动记账（需通知监听或无障碍其一可用）" else "已关闭自动记账",
+            )
+        }
+    }
+
+    fun simulatePayment() {
+        ensurePostNotifications()
         ConfirmDispatcher.onPaymentDetected(
             context = context,
             candidate = Candidate(
@@ -101,10 +161,62 @@ fun SettingsScreen(
         ) {
             Text("自动记账", style = MaterialTheme.typography.titleMedium)
             Text(
-                "选择要监听的支付 App，并在系统中开启通知使用权。",
+                "总开关开启后，在通知监听或无障碍可用时，通知栏显示「自动记账运行中」。",
                 color = AccountMutedColor,
                 style = MaterialTheme.typography.bodySmall,
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text("自动记账总开关", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (masterEnabled) {
+                            if (notificationListenerOn || accessibilityOn) {
+                                "状态：运行中"
+                            } else {
+                                "状态：已停止（请开启通知监听或无障碍）"
+                            }
+                        } else {
+                            "状态：关闭"
+                        },
+                        color = AccountMutedColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(
+                    checked = masterEnabled,
+                    onCheckedChange = { setMasterEnabled(it) },
+                )
+            }
+
+            Text(
+                "通知监听：${if (notificationListenerOn) "已开启" else "未开启"}  ·  无障碍：${if (accessibilityOn) "已开启" else "未开启"}",
+                color = if (notificationListenerOn || accessibilityOn) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = {
+                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("通知使用权设置")
+            }
+            OutlinedButton(
+                onClick = {
+                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("无障碍设置")
+            }
             Button(
                 onClick = onOpenWatchApps,
                 modifier = Modifier.fillMaxWidth(),
