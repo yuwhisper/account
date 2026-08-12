@@ -10,4 +10,8 @@ keystore.properties
 *.jks
 *.apk
 .idea/
+.gradle/
+**/build/
+android/.gradle/
+android/**/build/
 
