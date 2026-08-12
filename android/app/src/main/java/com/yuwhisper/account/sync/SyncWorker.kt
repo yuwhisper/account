@@ -10,6 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import retrofit2.HttpException
 import java.util.concurrent.TimeUnit
 
 class SyncWorker(
@@ -18,11 +19,15 @@ class SyncWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val outcome = CloudSync.create(applicationContext).syncNow()
-        return if (outcome.isSuccess) {
-            Result.success()
-        } else {
-            Result.retry()
+        if (outcome.isSuccess) return Result.success()
+
+        val err = outcome.exceptionOrNull()
+        if (err is HttpException && (err.code() == 401 || err.code() == 403)) {
+            TokenStore(applicationContext).clear()
+            cancelAll(applicationContext)
+            return Result.failure()
         }
+        return Result.retry()
     }
 
     companion object {

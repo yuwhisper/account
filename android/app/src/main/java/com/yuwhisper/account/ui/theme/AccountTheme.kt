@@ -10,35 +10,39 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/** Warm paper + deep teal — confirm card / ledger shared look. */
-private val Paper = Color(0xFFF3F0EA)
-private val PaperSurface = Color(0xFFFFFDF9)
-private val TealPrimary = Color(0xFF0F766E)
-private val TealOnPrimary = Color(0xFFFFFFFF)
-private val TealContainer = Color(0xFFD5F0EA)
-private val Ink = Color(0xFF1A2422)
-private val Muted = Color(0xFF6B7773)
-private val Expense = Color(0xFFC0453A)
-private val Income = Color(0xFF0F766E)
+/** Soft blush pink — premium light theme. */
+private val BlushBg = Color(0xFFFFF5F8)
+private val BlushSurface = Color(0xFFFFFBFC)
+private val RosePrimary = Color(0xFFD4849A)
+private val RoseDeep = Color(0xFFB65C78)
+private val RoseOnPrimary = Color(0xFFFFFFFF)
+private val RoseContainer = Color(0xFFFFE4EC)
+private val Ink = Color(0xFF3A2F35)
+private val Muted = Color(0xFF8A7A82)
+private val Expense = Color(0xFFC45C6A)
+private val Income = Color(0xFF7A9E8E)
 
 val AccountExpenseColor = Expense
 val AccountIncomeColor = Income
 val AccountMutedColor = Muted
 
 private val LightColors = lightColorScheme(
-    primary = TealPrimary,
-    onPrimary = TealOnPrimary,
-    primaryContainer = TealContainer,
-    onPrimaryContainer = Ink,
-    secondary = Color(0xFF3D5A56),
-    onSecondary = TealOnPrimary,
-    background = Paper,
+    primary = RosePrimary,
+    onPrimary = RoseOnPrimary,
+    primaryContainer = RoseContainer,
+    onPrimaryContainer = Color(0xFF5C3344),
+    secondary = RoseDeep,
+    onSecondary = RoseOnPrimary,
+    secondaryContainer = Color(0xFFFFEEF3),
+    onSecondaryContainer = Ink,
+    background = BlushBg,
     onBackground = Ink,
-    surface = PaperSurface,
+    surface = BlushSurface,
     onSurface = Ink,
-    surfaceVariant = Color(0xFFE8E3DA),
+    surfaceVariant = Color(0xFFF7E8EE),
     onSurfaceVariant = Muted,
-    outline = Color(0xFFD0C9BE),
+    outline = Color(0xFFE5CDD6),
+    error = Expense,
 )
 
 private val AppTypography = Typography(

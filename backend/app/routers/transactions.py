@@ -102,38 +102,38 @@ def push_transactions(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    for item in _fold_by_client_id(payload.transactions):
-        _validate_category(db, user.id, item.category_id)
-        existing = (
-            db.query(Transaction)
-            .filter(Transaction.user_id == user.id, Transaction.client_id == item.client_id)
-            .first()
-        )
-        if existing is None:
-            db.add(
-                Transaction(
-                    user_id=user.id,
-                    client_id=item.client_id,
-                    amount_cents=item.amount_cents,
-                    merchant=item.merchant,
-                    source=item.source,
-                    category_id=item.category_id,
-                    note=item.note,
-                    occurred_at=_to_utc_naive(item.occurred_at),
-                    updated_at=_to_utc_naive(item.updated_at),
-                    type=item.type,
-                )
-            )
-            db.flush()
-            continue
-
-        inbound = _to_utc_naive(item.updated_at)
-        server = _to_utc_naive(existing.updated_at)
-        if inbound < server:
-            continue
-        _apply_fields(existing, item)
-
     try:
+        for item in _fold_by_client_id(payload.transactions):
+            _validate_category(db, user.id, item.category_id)
+            existing = (
+                db.query(Transaction)
+                .filter(Transaction.user_id == user.id, Transaction.client_id == item.client_id)
+                .first()
+            )
+            if existing is None:
+                db.add(
+                    Transaction(
+                        user_id=user.id,
+                        client_id=item.client_id,
+                        amount_cents=item.amount_cents,
+                        merchant=item.merchant,
+                        source=item.source,
+                        category_id=item.category_id,
+                        note=item.note,
+                        occurred_at=_to_utc_naive(item.occurred_at),
+                        updated_at=_to_utc_naive(item.updated_at),
+                        type=item.type,
+                    )
+                )
+                db.flush()
+                continue
+
+            inbound = _to_utc_naive(item.updated_at)
+            server = _to_utc_naive(existing.updated_at)
+            if inbound < server:
+                continue
+            _apply_fields(existing, item)
+
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -151,13 +151,21 @@ def pull_transactions(
     user: User = Depends(get_current_user),
 ) -> TransactionPullResponse:
     since_utc = _to_utc_naive(since)
+    # Freeze the upper bound before the query. Returning a later timestamp can skip
+    # rows committed between the SELECT and response construction forever.
+    server_time = datetime.now(timezone.utc)
+    upper_bound = _to_utc_naive(server_time)
     rows = (
         db.query(Transaction)
-        .filter(Transaction.user_id == user.id, Transaction.updated_at > since_utc)
+        .filter(
+            Transaction.user_id == user.id,
+            Transaction.updated_at > since_utc,
+            Transaction.updated_at <= upper_bound,
+        )
         .order_by(Transaction.updated_at.asc(), Transaction.id.asc())
         .all()
     )
     return TransactionPullResponse(
         transactions=[_to_out(tx) for tx in rows],
-        server_time=datetime.now(timezone.utc),
+        server_time=server_time,
     )

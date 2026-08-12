@@ -54,12 +54,89 @@ class PaymentParseTest {
     }
 
     @Test
-    fun parseUnknownPackageReturnsNull() {
+    fun parseUnknownPackageWithAmount() {
         val r = PaymentParser.parse(
             packageName = "com.example.unknown",
             title = "付款",
             text = "金额：¥10.00",
         )
-        assertNull(r)
+        assertNotNull(r)
+        assertEquals(1000, r!!.amountCents)
+    }
+
+    @Test
+    fun parseAccessibilitySplitYenAndAmount() {
+        val r = PaymentParser.parseAccessibility(
+            packageName = "com.tencent.mm",
+            texts = listOf("支付成功", "¥", "12.34", "完成"),
+        )
+        assertNotNull(r)
+        assertEquals(1234, r!!.amountCents)
+    }
+
+    @Test
+    fun parseWechatRedPacketAccessibility() {
+        val r = PaymentParser.parseAccessibility(
+            packageName = "com.tencent.mm",
+            texts = listOf("红包", "已发送", "¥", "0.30", "给小明的红包", "看看大家的手气"),
+        )
+        assertNotNull(r)
+        assertEquals(30, r!!.amountCents)
+        assertTrue(
+            PaymentParser.shouldOfferConfirm(
+                "com.tencent.mm",
+                "",
+                "你发了一个红包 ¥0.30 等待对方领取",
+                accessibilityMode = true,
+            ),
+        )
+        assertTrue(
+            !PaymentParser.shouldOfferConfirm(
+                "com.tencent.mm",
+                "",
+                "塞钱进红包 ¥0.30 金额",
+                accessibilityMode = true,
+            ),
+        )
+    }
+
+    @Test
+    fun transferSuccessOffersConfirm() {
+        assertTrue(
+            PaymentParser.shouldOfferConfirm(
+                "com.tencent.mm",
+                "",
+                "待朋友确认收款 ¥1.00",
+                accessibilityMode = true,
+            ),
+        )
+        assertTrue(
+            PaymentParser.shouldOfferConfirm(
+                "com.tencent.mm",
+                "",
+                "转账成功 ¥2.00 转账给小红",
+                accessibilityMode = true,
+            ),
+        )
+    }
+
+    @Test
+    fun strongSuccessRequiredForA11yOffer() {
+        assertTrue(
+            PaymentParser.shouldOfferConfirm(
+                "com.tencent.mm",
+                "",
+                "支付成功 ¥3.00",
+                accessibilityMode = true,
+            ),
+        )
+        assertTrue(
+            !PaymentParser.shouldOfferConfirm(
+                "com.tencent.mm",
+                "",
+                "微信支付 聊天列表",
+                accessibilityMode = true,
+            ),
+        )
     }
 }

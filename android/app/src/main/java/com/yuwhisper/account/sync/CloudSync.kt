@@ -2,6 +2,7 @@ package com.yuwhisper.account.sync
 
 import android.content.Context
 import android.util.Log
+import com.yuwhisper.account.data.LedgerRepository
 import com.yuwhisper.account.data.local.AppDatabase
 import com.yuwhisper.account.data.local.entity.CategoryEntity
 import com.yuwhisper.account.data.local.entity.SyncMetaEntity
@@ -38,6 +39,7 @@ class CloudSync(
         return runCatching {
             seedIfEmpty(database)
             val api = apiClient.syncApi()
+            pushCategoryDeletions(api)
             pullAndMergeCategories(api)
             pushLocalCategories(api)
             pushPendingTransactions(api)
@@ -78,6 +80,28 @@ class CloudSync(
                         pendingSync = if (shouldTakeRemote) false else existing.pendingSync,
                     ),
                 )
+            }
+        }
+    }
+
+    private suspend fun pushCategoryDeletions(api: SyncApi) {
+        val tombstones = syncMetaDao.getByPrefix(LedgerRepository.CATEGORY_DELETE_PREFIX)
+        for (tombstone in tombstones) {
+            val serverId = tombstone.value.toLongOrNull()
+            if (serverId == null) {
+                syncMetaDao.delete(tombstone.key)
+                continue
+            }
+            try {
+                api.deleteCategory(serverId)
+                syncMetaDao.delete(tombstone.key)
+            } catch (e: HttpException) {
+                // Already deleted remotely is a successful idempotent outcome.
+                if (e.code() == 404) {
+                    syncMetaDao.delete(tombstone.key)
+                } else {
+                    throw e
+                }
             }
         }
     }
@@ -203,7 +227,11 @@ class CloudSync(
                         amountCents = dto.amount_cents,
                         merchant = dto.merchant,
                         source = dto.source,
-                        categoryLocalId = categoryLocalId ?: existing.categoryLocalId,
+                        categoryLocalId = if (dto.category_id == null) {
+                            null
+                        } else {
+                            categoryLocalId ?: existing.categoryLocalId
+                        },
                         note = dto.note,
                         occurredAt = SyncTime.parse(dto.occurred_at),
                         updatedAt = remoteUpdated,

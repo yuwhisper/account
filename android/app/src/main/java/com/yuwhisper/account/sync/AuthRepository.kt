@@ -1,6 +1,7 @@
 package com.yuwhisper.account.sync
 
 import android.content.Context
+import com.yuwhisper.account.AccountApp
 import com.yuwhisper.account.sync.dto.AuthRequest
 import retrofit2.HttpException
 
@@ -33,8 +34,15 @@ class AuthRepository(
 
     suspend fun login(email: String, password: String): Result<Unit> {
         return runCatching {
-            val token = apiClient.authApi().login(AuthRequest(email.trim(), password))
-            tokenStore.saveSession(token.access_token, email.trim())
+            val normalized = email.trim().lowercase()
+            val previous = tokenStore.getEmail()?.trim()?.lowercase()
+            val token = apiClient.authApi().login(AuthRequest(normalized, password))
+            if (previous != null && previous != normalized) {
+                // Different account on the same device — wipe prior cloud-linked local data.
+                val app = apiClientContext as? AccountApp
+                app?.ledgerRepository?.clearLocalAccountData()
+            }
+            tokenStore.saveSession(token.access_token, normalized)
             SyncWorker.ensurePeriodic(apiClientContext)
             SyncWorker.enqueueNow(apiClientContext)
         }.fold(

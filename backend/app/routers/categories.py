@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.db import get_db
-from app.models import Category, User
+from app.models import Category, Transaction, User
 from app.schemas import CategoryCreate, CategoryOut, CategoryUpdate
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
@@ -94,6 +94,11 @@ def delete_category(
     )
     if category is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    # Keep historical transactions valid after deleting a category.
+    db.query(Transaction).filter(
+        Transaction.user_id == user.id,
+        Transaction.category_id == category.id,
+    ).update({Transaction.category_id: None}, synchronize_session=False)
     db.delete(category)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

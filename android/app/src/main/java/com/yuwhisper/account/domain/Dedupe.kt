@@ -9,7 +9,7 @@ import kotlin.math.abs
  */
 data class Candidate(
     val source: String,
-    val amountCents: Int,
+    val amountCents: Int?,
     val merchant: String,
     val occurredAt: Instant,
 )
@@ -17,7 +17,8 @@ data class Candidate(
 /**
  * Deduplicates dual-channel / repeated payment events within a time window.
  *
- * Match key: source + amountCents + merchant (normalized) within [windowSeconds].
+ * - Known amount: source + amount + merchant
+ * - Unknown amount: only dedupe very recent identical source+merchant (avoid blocking next real pay)
  */
 object Dedupe {
 
@@ -26,13 +27,25 @@ object Dedupe {
         existing: List<Candidate>,
         windowSeconds: Int,
     ): Boolean {
-        val window = Duration.ofSeconds(windowSeconds.toLong())
         val keyMerchant = normalizeMerchant(candidate.merchant)
+        val amount = candidate.amountCents
+        if (amount != null) {
+            val window = Duration.ofSeconds(windowSeconds.toLong())
+            return existing.any { other ->
+                other.source == candidate.source &&
+                    other.amountCents == amount &&
+                    normalizeMerchant(other.merchant) == keyMerchant &&
+                    abs(Duration.between(other.occurredAt, candidate.occurredAt).seconds) <= window.seconds
+            }
+        }
+        // Null amount: short window only (15s) — first empty scan must not block a later filled scan
+        // of a *new* payment minutes later.
+        val short = Duration.ofSeconds(15)
         return existing.any { other ->
             other.source == candidate.source &&
-                other.amountCents == candidate.amountCents &&
+                other.amountCents == null &&
                 normalizeMerchant(other.merchant) == keyMerchant &&
-                abs(Duration.between(other.occurredAt, candidate.occurredAt).seconds) <= window.seconds
+                abs(Duration.between(other.occurredAt, candidate.occurredAt).seconds) <= short.seconds
         }
     }
 

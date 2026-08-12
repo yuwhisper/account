@@ -42,10 +42,9 @@ object AutoBookkeepingPrefs {
         prefs(context).edit().putBoolean(KEY_ONBOARDING_SEEN, true).apply()
     }
 
-    /** First launch, or master on while required permissions incomplete. */
+    /** First launch only. Later incompleteness is shown in Settings — do not force the wizard. */
     fun shouldShowPermissionOnboarding(context: Context): Boolean {
         if (!hasSeenOnboarding(context)) return true
-        if (isMasterEnabled(context) && !AutoLedgerPermissions.isReady(context)) return true
         return false
     }
 

@@ -51,8 +51,8 @@ object AutoLedgerPermissions {
         PermissionStep(
             id = PermissionStepId.OVERLAY,
             title = "悬浮窗",
-            description = "在其他应用上层弹出居中确认卡。部分机型显示为「显示在其他应用的上层」。",
-            isGranted = canDrawOverlays(context),
+            description = "备用通道：在其他应用上层弹出确认卡。已开无障碍时优先用无障碍悬浮层（可不依赖此项）；仍建议开启以覆盖通知捕获场景。",
+            isGranted = canDrawOverlays(context) || CaptureAvailability.isAccessibilityEnabled(context),
         ),
         PermissionStep(
             id = PermissionStepId.POST_NOTIFICATIONS,
@@ -69,6 +69,15 @@ object AutoLedgerPermissions {
     )
 
     fun isReady(context: Context): Boolean = steps(context).all { it.isGranted }
+
+    /**
+     * Enough to attempt auto-capture (do not nag the full wizard for battery/overlay alone).
+     * Need at least one capture channel + notification permission on Android 13+.
+     */
+    fun isCaptureReady(context: Context): Boolean {
+        if (!CaptureAvailability.isAnyCaptureChannelAvailable(context)) return false
+        return isPostNotificationsGranted(context)
+    }
 
     fun canDrawOverlays(context: Context): Boolean = Settings.canDrawOverlays(context)
 

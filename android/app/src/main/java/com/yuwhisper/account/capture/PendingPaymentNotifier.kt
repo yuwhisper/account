@@ -1,18 +1,20 @@
 package com.yuwhisper.account.capture
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.yuwhisper.account.ui.confirm.ConfirmPaymentActivity
 import java.util.Locale
 
 /**
- * Status-bar fallback when the centered confirm card cannot be shown.
- * Tap opens the same [ConfirmPaymentActivity].
+ * Status-bar fallback when the floating confirm card cannot be shown.
+ * Tap opens [ConfirmPaymentActivity]; never uses full-screen intent (that jumps out of WeChat).
  */
 object PendingPaymentNotifier {
 
@@ -22,7 +24,14 @@ object PendingPaymentNotifier {
     fun ensureChannel(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         val existing = manager.getNotificationChannel(CHANNEL_ID)
-        if (existing != null) return
+        if (existing != null) {
+            // Upgrade importance if an older install created a low channel.
+            if (existing.importance < NotificationManager.IMPORTANCE_HIGH) {
+                manager.deleteNotificationChannel(CHANNEL_ID)
+            } else {
+                return
+            }
+        }
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
@@ -30,6 +39,11 @@ object PendingPaymentNotifier {
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = "付款待确认入账提醒"
+                enableVibration(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    setAllowBubbles(true)
+                }
             },
         )
     }
@@ -43,7 +57,9 @@ object PendingPaymentNotifier {
     ) {
         ensureChannel(context)
         val intent = ConfirmPaymentActivity.createIntent(context, pendingId).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -61,17 +77,29 @@ object PendingPaymentNotifier {
             }
             append(" — 点击确认入账")
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val publicTitle = "惜夏记 · 待确认"
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(
+                NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle(publicTitle)
+                    .setContentText("有一笔付款待确认入账")
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .build(),
+            )
             .setAutoCancel(false)
             .setOngoing(false)
             .setContentIntent(pendingIntent)
-            .build()
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+        // Never setFullScreenIntent — it launches ConfirmPaymentActivity and leaves WeChat.
+        val notification = builder.build()
         runCatching {
             NotificationManagerCompat.from(context).notify(notificationId(pendingId), notification)
         }

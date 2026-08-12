@@ -16,6 +16,7 @@ import com.yuwhisper.account.capture.PendingPaymentNotifier
 import com.yuwhisper.account.data.local.entity.CategoryEntity
 import com.yuwhisper.account.data.local.entity.PendingPaymentEntity
 import com.yuwhisper.account.ui.theme.AccountTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -28,16 +29,11 @@ class ConfirmPaymentActivity : ComponentActivity() {
     private var categories by mutableStateOf<List<CategoryEntity>>(emptyList())
     private var loadError by mutableStateOf<String?>(null)
     private var pendingId: Long = -1L
+    private var loadJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        pendingId = intent.getLongExtra(EXTRA_PENDING_ID, -1L)
-        if (pendingId < 0) {
-            finish()
-            return
-        }
-
         val app = application as AccountApp
         setContent {
             AccountTheme {
@@ -47,16 +43,17 @@ class ConfirmPaymentActivity : ComponentActivity() {
                     loadError = loadError,
                     animateIn = true,
                     onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
+                        val confirmingId = pendingId
                         lifecycleScope.launch {
                             runCatching {
                                 app.ledgerRepository.confirmPendingPayment(
-                                    pendingLocalId = pendingId,
+                                    pendingLocalId = confirmingId,
                                     amountCents = amountCents,
                                     merchant = merchant,
                                     categoryLocalId = categoryLocalId,
                                     note = note,
                                 )
-                                PendingPaymentNotifier.cancel(this@ConfirmPaymentActivity, pendingId)
+                                PendingPaymentNotifier.cancel(this@ConfirmPaymentActivity, confirmingId)
                             }.onSuccess {
                                 onDone()
                                 finish()
@@ -75,10 +72,30 @@ class ConfirmPaymentActivity : ComponentActivity() {
             }
         }
 
-        lifecycleScope.launch {
+        showPending(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        showPending(intent)
+    }
+
+    private fun showPending(intent: Intent) {
+        val id = intent.getLongExtra(EXTRA_PENDING_ID, -1L)
+        if (id < 0) {
+            finish()
+            return
+        }
+        pendingId = id
+        pending = null
+        loadError = null
+        loadJob?.cancel()
+        val app = application as AccountApp
+        loadJob = lifecycleScope.launch {
             runCatching {
                 app.ensureSeeded()
-                val row = app.ledgerRepository.getPendingPayment(pendingId)
+                val row = app.ledgerRepository.getPendingPayment(id)
                 if (row == null) {
                     loadError = "待确认记录不存在或已入账"
                     return@runCatching

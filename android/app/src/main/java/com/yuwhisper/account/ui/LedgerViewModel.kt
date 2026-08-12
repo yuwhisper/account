@@ -34,7 +34,7 @@ class LedgerViewModel(
     val ledgerDays: StateFlow<List<LedgerDayGroup>> = combine(transactions, categories) { txs, cats ->
         val catMap = cats.associateBy { it.localId }
         val zone = ZoneId.systemDefault()
-        txs.groupBy { LocalDate.ofInstant(it.occurredAt, zone) }
+        txs.groupBy { it.occurredAt.atZone(zone).toLocalDate() }
             .toSortedMap(compareByDescending { it })
             .map { (date, dayTxs) ->
                 val expenseCents = dayTxs
@@ -64,7 +64,7 @@ class LedgerViewModel(
         val zone = ZoneId.systemDefault()
         val month = YearMonth.now(zone)
         val monthTxs = txs.filter {
-            YearMonth.from(LocalDate.ofInstant(it.occurredAt, zone)) == month &&
+            YearMonth.from(it.occurredAt.atZone(zone).toLocalDate()) == month &&
                 it.type == LedgerRepository.TYPE_EXPENSE
         }
         val total = monthTxs.sumOf { it.amountCents }

@@ -1,14 +1,11 @@
 package com.yuwhisper.account.capture
 
-import android.app.Service
+import android.accessibilityservice.AccessibilityService
 import android.content.Context
-import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
-import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
@@ -40,15 +37,19 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
- * Floating confirm dialog via SYSTEM_ALERT_WINDOW — stays over WeChat/Alipay without opening the app UI.
+ * Floating confirm card hosted by [PaymentAccessibilityService] using
+ * [WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY] — does not need
+ * SYSTEM_ALERT_WINDOW and does not bring the ledger app to the foreground.
  */
-class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+class AccessibilityConfirmOverlay(
+    private val service: AccessibilityService,
+) : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
     private val savedStateController = SavedStateRegistryController.create(this)
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore: ViewModelStore get() = store
@@ -57,54 +58,62 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
     private var windowManager: WindowManager? = null
     private var composeView: ComposeView? = null
     private var loadJob: Job? = null
-
     private var pending by mutableStateOf<PendingPaymentEntity?>(null)
     private var categories by mutableStateOf<List<CategoryEntity>>(emptyList())
     private var loadError by mutableStateOf<String?>(null)
     private var pendingId: Long = -1L
 
-    override fun onCreate() {
-        super.onCreate()
+    init {
         savedStateController.performRestore(null)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         lifecycleRegistry.currentState = Lifecycle.State.STARTED
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-
-        val id = intent?.getLongExtra(EXTRA_PENDING_ID, -1L) ?: -1L
-        if (id < 0 || !Settings.canDrawOverlays(this)) {
-            Log.w(TAG, "cannot show overlay id=$id canDraw=${Settings.canDrawOverlays(this)}")
-            // Prefer notification-only; do not jump into the app.
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (composeView != null && pendingId == id) {
-            return START_NOT_STICKY
-        }
-        pendingId = id
-        mainHandler.post {
-            detachOverlay()
-            if (!attachOverlay()) {
-                Log.w(TAG, "addView failed; notification remains for pendingId=$id")
-                stopSelf()
-                return@post
-            }
-            loadData(id)
-        }
-        return START_NOT_STICKY
     }
 
-    private fun attachOverlay(): Boolean {
-        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+    /** Returns true only after the overlay view is actually attached (when called on main). */
+    fun show(pendingId: Long): Boolean {
+        if (pendingId < 0) return false
+        this.pendingId = pendingId
+        return runCatching {
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                showNow(pendingId)
+            } else {
+                // Caller should prefer main; async path cannot report attach failure.
+                mainHandler.post { showNow(pendingId) }
+                true
+            }
+        }.getOrElse {
+            Log.w(TAG, "a11y overlay show failed", it)
+            false
+        }
+    }
+
+    private fun showNow(pendingId: Long): Boolean {
+        detach()
+        if (!attach()) {
+            Log.w(TAG, "a11y overlay attach failed pendingId=$pendingId")
+            return false
+        }
+        loadData(pendingId)
+        return true
+    }
+
+    fun destroy() {
+        mainHandler.post {
+            detach()
+            lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
+            store.clear()
+            scope.cancel()
+        }
+    }
+
+    private fun attach(): Boolean {
+        val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         windowManager = wm
-        val view = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@ConfirmOverlayService)
-            setViewTreeViewModelStoreOwner(this@ConfirmOverlayService)
-            setViewTreeSavedStateRegistryOwner(this@ConfirmOverlayService)
+        val view = ComposeView(service).apply {
+            setViewTreeLifecycleOwner(this@AccessibilityConfirmOverlay)
+            setViewTreeViewModelStoreOwner(this@AccessibilityConfirmOverlay)
+            setViewTreeSavedStateRegistryOwner(this@AccessibilityConfirmOverlay)
             setContent {
                 AccountTheme {
                     ConfirmPaymentScreen(
@@ -113,8 +122,8 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
                         loadError = loadError,
                         animateIn = true,
                         onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
-                            val app = application as AccountApp
-                            serviceScope.launch {
+                            val app = service.application as AccountApp
+                            scope.launch {
                                 runCatching {
                                     app.ledgerRepository.confirmPendingPayment(
                                         pendingLocalId = pendingId,
@@ -123,33 +132,26 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
                                         categoryLocalId = categoryLocalId,
                                         note = note,
                                     )
-                                    PendingPaymentNotifier.cancel(this@ConfirmOverlayService, pendingId)
+                                    PendingPaymentNotifier.cancel(service, pendingId)
                                 }.onSuccess {
                                     onDone()
-                                    mainHandler.post { dismissOverlay() }
+                                    mainHandler.post { detach() }
                                 }.onFailure { e ->
                                     Log.e(TAG, "confirm failed", e)
                                     onError(e.message ?: "确认失败")
                                 }
                             }
                         },
-                        onDismissKeepPending = { dismissOverlay() },
+                        onDismissKeepPending = { detach() },
                     )
                 }
             }
         }
         composeView = view
-
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            type,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
             PixelFormat.TRANSLUCENT,
@@ -157,21 +159,25 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
             gravity = Gravity.CENTER
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
             title = "惜夏记确认"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
         }
         return runCatching {
             wm.addView(view, params)
             true
         }.getOrElse {
-            Log.e(TAG, "add overlay failed", it)
+            Log.e(TAG, "add a11y overlay failed", it)
             composeView = null
             false
         }
     }
 
     private fun loadData(id: Long) {
-        val app = application as AccountApp
+        val app = service.application as AccountApp
         loadJob?.cancel()
-        loadJob = serviceScope.launch {
+        loadJob = scope.launch {
             runCatching {
                 app.ensureSeeded()
                 val row = app.ledgerRepository.getPendingPayment(id)
@@ -190,12 +196,7 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         }
     }
 
-    private fun dismissOverlay() {
-        detachOverlay()
-        stopSelf()
-    }
-
-    private fun detachOverlay() {
+    private fun detach() {
         loadJob?.cancel()
         loadJob = null
         val view = composeView
@@ -203,39 +204,11 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         if (view != null) {
             runCatching { windowManager?.removeView(view) }
         }
-    }
-
-    override fun onDestroy() {
-        detachOverlay()
-        serviceScope.cancel()
-        lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
-        store.clear()
-        super.onDestroy()
+        pending = null
+        loadError = null
     }
 
     companion object {
-        const val EXTRA_PENDING_ID = "pending_id"
-        private const val TAG = "ConfirmOverlay"
-
-        fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
-
-        fun show(context: Context, pendingId: Long): Boolean {
-            if (!canShow(context)) return false
-            val appContext = context.applicationContext
-            val intent = Intent(appContext, ConfirmOverlayService::class.java)
-                .putExtra(EXTRA_PENDING_ID, pendingId)
-            return runCatching {
-                // Prefer starting from a live service context when provided.
-                if (context !== appContext) {
-                    context.startService(intent)
-                } else {
-                    appContext.startService(intent)
-                }
-                true
-            }.getOrElse {
-                Log.w(TAG, "start overlay service failed", it)
-                false
-            }
-        }
+        private const val TAG = "A11yConfirmOverlay"
     }
 }

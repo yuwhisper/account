@@ -1,6 +1,7 @@
 package com.yuwhisper.account.sync
 
 import android.content.Context
+import java.net.URI
 
 /** Configurable API base URL (emulator default: 10.0.2.2). */
 class SyncPrefs(context: Context) {
@@ -24,11 +25,23 @@ class SyncPrefs(context: Context) {
 
         fun normalizeBaseUrl(url: String): String {
             val trimmed = url.trim().trimEnd('/')
-            return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            val normalized = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
                 trimmed
             } else {
-                "http://$trimmed"
+                "https://$trimmed"
             }
+            val uri = runCatching { URI(normalized) }
+                .getOrElse { throw IllegalArgumentException("服务器地址格式不正确") }
+            val host = uri.host?.lowercase()
+                ?: throw IllegalArgumentException("服务器地址缺少主机名")
+            require(uri.userInfo == null && uri.fragment == null && uri.query == null) {
+                "服务器地址不能包含账号、参数或片段"
+            }
+            val localDevHost = host == "10.0.2.2" || host == "127.0.0.1" || host == "localhost"
+            require(uri.scheme == "https" || (uri.scheme == "http" && localDevHost)) {
+                "远程服务器必须使用 HTTPS"
+            }
+            return normalized
         }
     }
 }

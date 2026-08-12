@@ -84,7 +84,7 @@ fun ConfirmPaymentScreen(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0x66000000), Color(0x99000000)),
+                    listOf(Color(0x66F7D6E0), Color(0x99E8A0B5)),
                 ),
             )
             .clickable(onClick = onDismissKeepPending),
@@ -183,11 +183,19 @@ private fun ConfirmCard(
             .padding(horizontal = 22.dp),
         shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
-        shadowElevation = 16.dp,
+        tonalElevation = 0.dp,
+        shadowElevation = 10.dp,
     ) {
         Column(
             modifier = Modifier
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                            MaterialTheme.colorScheme.surface,
+                        ),
+                    ),
+                )
                 .padding(horizontal = 22.dp, vertical = 26.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -298,8 +306,13 @@ private fun ConfirmCard(
                 enabled = !saving,
                 onClick = {
                     val yuan = amountText.toDoubleOrNull()
-                    if (yuan == null || yuan < 0) {
-                        errorMessage = "请输入有效金额"
+                    if (yuan == null || !yuan.isFinite() || yuan <= 0.0 || yuan > 1_000_000.0) {
+                        errorMessage = "请输入 0.01～1000000 的有效金额"
+                        return@Button
+                    }
+                    val parts = amountText.trim().split('.')
+                    if (parts.size > 1 && parts[1].length > 2) {
+                        errorMessage = "金额最多两位小数"
                         return@Button
                     }
                     val cat = selectedCategory
@@ -308,6 +321,10 @@ private fun ConfirmCard(
                         return@Button
                     }
                     val cents = Math.round(yuan * 100.0)
+                    if (cents <= 0L) {
+                        errorMessage = "请输入有效金额"
+                        return@Button
+                    }
                     saving = true
                     errorMessage = null
                     onConfirm(

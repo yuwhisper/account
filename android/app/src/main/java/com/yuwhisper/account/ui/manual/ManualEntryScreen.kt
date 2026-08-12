@@ -180,8 +180,13 @@ fun ManualEntryScreen(
                 enabled = !saving,
                 onClick = {
                     val yuan = amountText.toDoubleOrNull()
-                    if (yuan == null || yuan < 0) {
-                        scope.launch { snackbar.showSnackbar("\u8bf7\u8f93\u5165\u6709\u6548\u91d1\u989d") }
+                    if (yuan == null || !yuan.isFinite() || yuan <= 0.0 || yuan > 1_000_000.0) {
+                        scope.launch { snackbar.showSnackbar("请输入 0.01～1000000 的有效金额") }
+                        return@Button
+                    }
+                    val parts = amountText.trim().split('.')
+                    if (parts.size > 1 && parts[1].length > 2) {
+                        scope.launch { snackbar.showSnackbar("金额最多两位小数") }
                         return@Button
                     }
                     val occurredAt = runCatching {
@@ -195,6 +200,10 @@ fun ManualEntryScreen(
                         return@Button
                     }
                     val cents = Math.round(yuan * 100.0)
+                    if (cents <= 0L) {
+                        scope.launch { snackbar.showSnackbar("请输入有效金额") }
+                        return@Button
+                    }
                     saving = true
                     onSave(
                         cents,

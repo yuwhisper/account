@@ -40,6 +40,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.yuwhisper.account.capture.AutoBookkeepingPrefs
 import com.yuwhisper.account.capture.AutoBookkeepingStatusService
 import com.yuwhisper.account.capture.AutoLedgerPermissions
+import com.yuwhisper.account.capture.CaptureDebug
 import com.yuwhisper.account.capture.ConfirmDispatcher
 import com.yuwhisper.account.capture.PermissionStep
 import com.yuwhisper.account.domain.Candidate
@@ -80,10 +81,16 @@ fun SettingsScreen(
     var permissionsReady by remember {
         mutableStateOf(AutoLedgerPermissions.isReady(context))
     }
+    var captureReady by remember {
+        mutableStateOf(AutoLedgerPermissions.isCaptureReady(context))
+    }
+    var captureDebug by remember { mutableStateOf(CaptureDebug.lastNote) }
 
     fun refreshPermissionStatus() {
         permissionSteps = AutoLedgerPermissions.steps(context)
         permissionsReady = AutoLedgerPermissions.isReady(context)
+        captureReady = AutoLedgerPermissions.isCaptureReady(context)
+        captureDebug = CaptureDebug.lastNote
         AutoBookkeepingStatusService.refresh(context)
     }
 
@@ -105,7 +112,8 @@ fun SettingsScreen(
         AutoBookkeepingPrefs.setMasterEnabled(context, enabled)
         masterEnabled = enabled
         AutoBookkeepingStatusService.refresh(context)
-        if (enabled && !AutoLedgerPermissions.isReady(context)) {
+        // Only open wizard when capture channels are missing — not for battery alone.
+        if (enabled && !AutoLedgerPermissions.isCaptureReady(context)) {
             onOpenPermissionOnboarding()
             return
         }
@@ -155,7 +163,7 @@ fun SettingsScreen(
         ) {
             Text("自动记账", style = MaterialTheme.typography.titleMedium)
             Text(
-                "付款后用悬浮窗弹出确认卡，不必跳进本应用。默认不常驻前台服务，更省电。",
+                "付款后优先用无障碍悬浮层弹出确认卡（不跳进本应用）。也可另开系统悬浮窗作备用。默认不常驻前台服务，更省电。",
                 color = AccountMutedColor,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -169,8 +177,8 @@ fun SettingsScreen(
                     Text(
                         when {
                             !masterEnabled -> "状态：关闭"
-                            permissionsReady -> "状态：已开启（事件触发时唤醒）"
-                            else -> "状态：权限未齐（请完成引导）"
+                            captureReady -> "状态：捕获通道可用"
+                            else -> "状态：无障碍/通知监听未开（点下方引导）"
                         },
                         color = AccountMutedColor,
                         style = MaterialTheme.typography.bodySmall,
@@ -205,13 +213,22 @@ fun SettingsScreen(
             }
 
             Text(
-                if (permissionsReady) "自动记账已就绪" else "权限未完成，不可标为已就绪",
-                color = if (permissionsReady) {
+                when {
+                    permissionsReady -> "权限全部就绪"
+                    captureReady -> "可捕获付款（电池/悬浮窗建议仍开启，减少被杀）"
+                    else -> "捕获通道未开：请开启无障碍或通知使用权"
+                },
+                color = if (captureReady) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.error
                 },
                 style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "最近捕获：$captureDebug",
+                color = AccountMutedColor,
+                style = MaterialTheme.typography.bodySmall,
             )
             PermissionStatusList(steps = permissionSteps)
             Button(

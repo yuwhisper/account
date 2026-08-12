@@ -1,18 +1,22 @@
 package com.yuwhisper.account.capture
 
 import android.app.Notification
+import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.yuwhisper.account.AccountApp
 import com.yuwhisper.account.domain.Candidate
+import com.yuwhisper.account.domain.DefaultWatchApps
 import com.yuwhisper.account.domain.PaymentParser
 import kotlinx.coroutines.launch
 import java.time.Instant
 
 /**
- * Captures payment notifications from enabled WatchApp packages,
- * parses them, and forwards to [ConfirmDispatcher].
+ * Captures payment notifications from enabled WatchApp packages.
+ *
+ * WeChat QR pays often skip a useful notification — accessibility is primary;
+ * this still catches「微信支付」voucher / template notifications when present.
  */
 class PaymentNotificationListener : NotificationListenerService() {
 
@@ -30,17 +34,15 @@ class PaymentNotificationListener : NotificationListenerService() {
         if (sbn == null) return
         if (!AutoBookkeepingPrefs.isMasterEnabled(this)) return
         val packageName = sbn.packageName ?: return
-        if (packageName == applicationContext.packageName) {
-            // Ignore our own pending / status notifications.
-            return
-        }
+        if (packageName == applicationContext.packageName) return
+        if ((sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
 
         val app = applicationContext as? AccountApp ?: return
+        val listener = this
         app.applicationScope.launch {
             runCatching {
                 app.ensureSeeded()
-                val enabled = app.ledgerRepository.isWatchAppEnabled(packageName)
-                if (!enabled) {
+                if (!app.ledgerRepository.isWatchAppEnabled(packageName)) {
                     Log.d(TAG, "skip disabled package=$packageName")
                     return@runCatching
                 }
@@ -52,18 +54,26 @@ class PaymentNotificationListener : NotificationListenerService() {
                     return@runCatching
                 }
 
-                val parsed = PaymentParser.parse(packageName, title, text)
-                if (parsed == null) {
-                    Log.d(TAG, "parse miss package=$packageName")
+                if (!PaymentParser.shouldOfferConfirm(packageName, title, text, accessibilityMode = false)) {
+                    Log.d(TAG, "not payment-like package=$packageName title=$title")
                     return@runCatching
                 }
 
+                val parsed = PaymentParser.parse(packageName, title, text)
+                val source = parsed?.source ?: sourceForPackage(packageName)
+                val merchant = parsed?.merchant?.takeIf { it.isNotBlank() }
+                    ?: title.takeIf {
+                        it.isNotBlank() && !it.contains("微信") && !it.contains("支付宝")
+                    }
+                    ?: "未知商户"
+
+                Log.i(TAG, "notif hit pkg=$packageName amount=${parsed?.amountCents} title=$title")
                 ConfirmDispatcher.onPaymentDetected(
-                    context = app,
+                    context = listener,
                     candidate = Candidate(
-                        source = parsed.source,
-                        amountCents = parsed.amountCents,
-                        merchant = parsed.merchant,
+                        source = source,
+                        amountCents = parsed?.amountCents,
+                        merchant = merchant,
                         occurredAt = Instant.ofEpochMilli(sbn.postTime),
                     ),
                     captureChannel = CHANNEL,
@@ -77,16 +87,33 @@ class PaymentNotificationListener : NotificationListenerService() {
 
     private fun extractTitleAndText(notification: Notification): Pair<String, String> {
         val extras = notification.extras
-        val title = extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val title = listOf(
+            extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_TITLE_BIG)?.toString(),
+        ).firstOrNull { !it.isNullOrBlank() }.orEmpty()
+
         val text = extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         val bigText = extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
         val subText = extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty()
         val infoText = extras?.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString().orEmpty()
-        val body = listOf(text, bigText, subText, infoText)
+        val summary = extras?.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString().orEmpty()
+        val ticker = notification.tickerText?.toString().orEmpty()
+        val lines = extras?.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+            ?.mapNotNull { it?.toString()?.takeIf { s -> s.isNotBlank() } }
+            .orEmpty()
+
+        val body = (listOf(text, bigText, subText, infoText, summary, ticker) + lines)
             .filter { it.isNotBlank() }
             .distinct()
             .joinToString("\n")
         return title to body
+    }
+
+    private fun sourceForPackage(packageName: String): String = when (packageName) {
+        DefaultWatchApps.WECHAT -> "wechat"
+        DefaultWatchApps.ALIPAY -> "alipay"
+        DefaultWatchApps.UNIONPAY -> "unionpay"
+        else -> packageName.substringAfterLast('.').ifBlank { "other" }
     }
 
     companion object {

@@ -92,8 +92,10 @@ fun AccountRoot(repository: LedgerRepository) {
     }
 
     LaunchedEffect(Unit) {
+        // First install only — never force the full wizard again after force-stop / 清后台.
         if (!onboardingAutoShown && AutoBookkeepingPrefs.shouldShowPermissionOnboarding(context)) {
             onboardingAutoShown = true
+            AutoBookkeepingPrefs.setOnboardingSeen(context)
             openPermissionOnboarding()
         }
     }

@@ -28,6 +28,9 @@ interface TransactionDao {
     @Query("DELETE FROM transactions WHERE localId = :localId")
     suspend fun deleteByLocalId(localId: Long)
 
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM transactions WHERE clientId = :clientId LIMIT 1")
     suspend fun findByClientId(clientId: String): TransactionEntity?
 }

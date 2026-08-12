@@ -73,12 +73,18 @@ fun LoginScreen(
         busy = true
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                auth.setBaseUrl(baseUrl)
-                if (register) {
-                    auth.register(trimmedEmail, password)
-                } else {
-                    auth.login(trimmedEmail, password)
-                }
+                runCatching {
+                    auth.setBaseUrl(baseUrl)
+                }.fold(
+                    onSuccess = {
+                        if (register) {
+                            auth.register(trimmedEmail, password)
+                        } else {
+                            auth.login(trimmedEmail, password)
+                        }
+                    },
+                    onFailure = { Result.failure(it) },
+                )
             }
             busy = false
             result.onSuccess {

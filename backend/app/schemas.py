@@ -5,13 +5,17 @@ from pydantic import BaseModel, Field
 
 
 class UserCreate(BaseModel):
-    email: str
-    password: str = Field(min_length=6)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=6, max_length=72)
+
+    model_config = {"str_strip_whitespace": True}
 
 
 class UserLogin(BaseModel):
-    email: str
-    password: str
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=72)
+
+    model_config = {"str_strip_whitespace": True}
 
 
 class Token(BaseModel):
@@ -50,18 +54,18 @@ class CategoryOut(BaseModel):
 
 class TransactionIn(BaseModel):
     client_id: str = Field(min_length=1, max_length=64)
-    amount_cents: int
-    merchant: str = ""
-    source: str = ""
+    amount_cents: int = Field(ge=0, le=9_000_000_000_000_000)
+    merchant: str = Field(default="", max_length=255)
+    source: str = Field(default="", max_length=64)
     category_id: Optional[int] = None
-    note: str = ""
+    note: str = Field(default="", max_length=512)
     occurred_at: datetime
     updated_at: datetime
     type: str = Field(pattern="^(expense|income)$")
 
 
 class TransactionPushRequest(BaseModel):
-    transactions: list[TransactionIn]
+    transactions: list[TransactionIn] = Field(max_length=500)
 
 
 class TransactionOut(BaseModel):

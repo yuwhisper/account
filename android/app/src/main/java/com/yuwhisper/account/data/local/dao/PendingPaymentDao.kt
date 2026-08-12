@@ -27,4 +27,7 @@ interface PendingPaymentDao {
 
     @Query("DELETE FROM pending_payments WHERE localId = :localId")
     suspend fun deleteByLocalId(localId: Long)
+
+    @Query("DELETE FROM pending_payments")
+    suspend fun deleteAll()
 }

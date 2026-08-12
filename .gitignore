@@ -4,6 +4,7 @@
 __pycache__/
 *.pyc
 *.db
+.secret_key
 .pytest_cache/
 local.properties
 keystore.properties

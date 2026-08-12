@@ -1,8 +1,10 @@
 package com.yuwhisper.account.data
 
+import androidx.room.withTransaction
 import com.yuwhisper.account.data.local.AppDatabase
 import com.yuwhisper.account.data.local.entity.CategoryEntity
 import com.yuwhisper.account.data.local.entity.PendingPaymentEntity
+import com.yuwhisper.account.data.local.entity.SyncMetaEntity
 import com.yuwhisper.account.data.local.entity.TransactionEntity
 import com.yuwhisper.account.data.local.entity.WatchAppEntity
 import com.yuwhisper.account.domain.Candidate
@@ -130,7 +132,36 @@ class LedgerRepository(
 
     suspend fun deleteCategory(localId: Long) {
         ensureSeeded()
-        categoryDao.deleteByLocalId(localId)
+        database.withTransaction {
+            val category = categoryDao.getAll().firstOrNull { it.localId == localId }
+                ?: return@withTransaction
+            category.serverId?.let { serverId ->
+                database.syncMetaDao().upsert(
+                    SyncMetaEntity(
+                        key = "$CATEGORY_DELETE_PREFIX$serverId",
+                        value = serverId.toString(),
+                        updatedAt = Instant.now(),
+                    ),
+                )
+            }
+            categoryDao.deleteByLocalId(localId)
+        }
+        notifyPendingSync()
+    }
+
+    /**
+     * Wipe cloud-linked local rows when switching accounts so user B never sees user A's ledger
+     * or reuses A's server category IDs / sync cursor.
+     */
+    suspend fun clearLocalAccountData() {
+        database.withTransaction {
+            transactionDao.deleteAll()
+            pendingPaymentDao.deleteAll()
+            categoryDao.deleteAll()
+            database.syncMetaDao().deleteAll()
+        }
+        // Re-seed default categories for the new session.
+        com.yuwhisper.account.data.local.seedIfEmpty(database)
     }
 
     /** Pending + booked candidates for [com.yuwhisper.account.domain.Dedupe]. */
@@ -139,6 +170,34 @@ class LedgerRepository(
         val fromPending = pendingPaymentDao.getAll().map { it.toCandidate() }
         val fromTx = transactionDao.getAll().map { it.toCandidate() }
         return fromPending + fromTx
+    }
+
+    /**
+     * If an unconfirmed pending already matches [candidate] inside [windowSeconds],
+     * return its id so the UI can be shown again (instead of silently skipping).
+     */
+    suspend fun findMatchingPendingId(
+        candidate: Candidate,
+        windowSeconds: Int,
+    ): Long? {
+        ensureSeeded()
+        val keyMerchant = candidate.merchant.trim().lowercase()
+        val amount = candidate.amountCents
+        val window = windowSeconds.toLong()
+        return pendingPaymentDao.getAll().firstOrNull { row ->
+            val other = row.toCandidate()
+            if (other.source != candidate.source) return@firstOrNull false
+            if (other.merchant.trim().lowercase() != keyMerchant) return@firstOrNull false
+            val dt = kotlin.math.abs(
+                java.time.Duration.between(other.occurredAt, candidate.occurredAt).seconds,
+            )
+            if (dt > window) return@firstOrNull false
+            if (amount != null) {
+                other.amountCents == amount
+            } else {
+                other.amountCents == null
+            }
+        }?.localId
     }
 
     suspend fun insertPendingPayment(entity: PendingPaymentEntity): Long {
@@ -165,24 +224,26 @@ class LedgerRepository(
         ensureSeeded()
         require(amountCents >= 0) { "amountCents must be >= 0" }
         require(categoryLocalId > 0) { "category required" }
-        val pending = pendingPaymentDao.getById(pendingLocalId)
-            ?: error("pending not found: $pendingLocalId")
-        val now = Instant.now()
-        transactionDao.insert(
-            TransactionEntity(
-                clientId = UUID.randomUUID().toString(),
-                amountCents = amountCents,
-                merchant = merchant.trim(),
-                source = pending.source.ifBlank { SOURCE_MANUAL },
-                categoryLocalId = categoryLocalId,
-                note = note.trim(),
-                occurredAt = pending.occurredAt ?: pending.createdAt,
-                updatedAt = now,
-                type = TYPE_EXPENSE,
-                pendingSync = true,
-            ),
-        )
-        pendingPaymentDao.deleteByLocalId(pendingLocalId)
+        database.withTransaction {
+            val pending = pendingPaymentDao.getById(pendingLocalId)
+                ?: error("pending not found: $pendingLocalId")
+            val now = Instant.now()
+            transactionDao.insert(
+                TransactionEntity(
+                    clientId = UUID.randomUUID().toString(),
+                    amountCents = amountCents,
+                    merchant = merchant.trim(),
+                    source = pending.source.ifBlank { SOURCE_MANUAL },
+                    categoryLocalId = categoryLocalId,
+                    note = note.trim(),
+                    occurredAt = pending.occurredAt ?: pending.createdAt,
+                    updatedAt = now,
+                    type = TYPE_EXPENSE,
+                    pendingSync = true,
+                ),
+            )
+            pendingPaymentDao.deleteByLocalId(pendingLocalId)
+        }
         notifyPendingSync()
     }
 
@@ -220,6 +281,7 @@ class LedgerRepository(
     }
 
     companion object {
+        const val CATEGORY_DELETE_PREFIX = "category_delete:"
         const val TYPE_EXPENSE = "expense"
         const val TYPE_INCOME = "income"
         const val SOURCE_MANUAL = "manual"
@@ -238,7 +300,7 @@ class LedgerRepository(
 
 private fun PendingPaymentEntity.toCandidate(): Candidate = Candidate(
     source = source,
-    amountCents = (amountCents ?: 0).toInt(),
+    amountCents = amountCents?.toInt(),
     merchant = merchant,
     occurredAt = occurredAt ?: createdAt,
 )

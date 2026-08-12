@@ -47,11 +47,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // 无 keystore.properties 时回退 debug 签名，便于本地 assembleRelease
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
-                signingConfigs.getByName("debug")
+                // Do not fall back to debug signing for release artifacts.
+                null
             }
         }
     }
@@ -108,4 +108,12 @@ dependencies {
     implementation("androidx.security:security-crypto:1.0.0")
 
     testImplementation("junit:junit:4.13.2")
+}
+
+tasks.matching { it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("bundle") || it.name.startsWith("package")) }.configureEach {
+    doFirst {
+        check(hasReleaseKeystore) {
+            "Release builds require android/keystore.properties. Refusing to ship a debug-signed release."
+        }
+    }
 }

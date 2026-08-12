@@ -42,4 +42,7 @@ interface CategoryDao {
 
     @Query("DELETE FROM categories WHERE localId = :localId")
     suspend fun deleteByLocalId(localId: Long)
+
+    @Query("DELETE FROM categories")
+    suspend fun deleteAll()
 }

@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.YuWhisperAccount" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.YuWhisperAccount" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#00FFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFBFC</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">#FFFFF5F8</item>
+    </style>
 
-    <style name="Theme.YuWhisperAccount.Confirm" parent="android:Theme.Material.Light.Dialog.NoActionBar">
+    <style name="Theme.YuWhisperAccount.Confirm" parent="android:Theme.Translucent.NoTitleBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowIsFloating">false</item>
         <item name="android:windowFullscreen">false</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:backgroundDimEnabled">true</item>
-        <item name="android:backgroundDimAmount">0.45</item>
-        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
+        <item name="android:backgroundDimEnabled">false</item>
         <item name="android:colorBackgroundCacheHint">@null</item>
         <item name="android:windowCloseOnTouchOutside">false</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
     </style>
 </resources>
