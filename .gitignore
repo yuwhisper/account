@@ -3,9 +3,15 @@
 .venv/
 __pycache__/
 *.pyc
+*.db
+.pytest_cache/
 local.properties
 keystore.properties
 *.jks
 *.apk
 .idea/
+.gradle/
+**/build/
+android/.gradle/
+android/**/build/
 

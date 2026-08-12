@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>语声记账 — 隐私说明</title>
+  <style>
+    :root {
+      --bg: #f6f3ee;
+      --ink: #1c2a24;
+      --muted: #5a6b63;
+      --accent: #1f8a70;
+      --line: #d9e0db;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #e7f5ef 0%, transparent 55%),
+        var(--bg);
+      line-height: 1.65;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.1rem; margin-top: 1.75rem; }
+    p, li { color: var(--ink); }
+    .muted { color: var(--muted); }
+    a { color: var(--accent); }
+    ul { padding-left: 1.2rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="./index.html">← 返回下载页</a></p>
+    <h1>隐私说明</h1>
+    <p class="muted">语声记账 · 侧载分发 · 第一版</p>
+
+    <h2>我们如何使用敏感能力</h2>
+    <ul>
+      <li><strong>无障碍服务</strong>仅用于识别付款成功页上的金额、商户等记账所需信息，并弹出确认入账卡片。</li>
+      <li><strong>通知监听</strong>仅用于读取已开启「识别场景」的应用付款通知，以完成自动记账。</li>
+      <li>不采集与记账无关的屏幕内容；不读取支付 App 私有加密数据库。</li>
+    </ul>
+
+    <h2>数据如何保存与同步</h2>
+    <ul>
+      <li>确认入账后的流水与分类保存在本机；登录后可按账号同步到自建后端。</li>
+      <li>「识别场景」配置与「待确认」队列仅存本机，不同步到服务器。</li>
+      <li>未登录时也可本地记账；登录后可批量上传。</li>
+    </ul>
+
+    <h2>我们不会做什么</h2>
+    <ul>
+      <li><strong>不出售</strong>用户数据给第三方。</li>
+      <li>不以广告或无关分析为目的收集屏幕 / 通知内容。</li>
+      <li>第一版不上应用商店；安装包通过下载页 / GitHub Releases 提供。</li>
+    </ul>
+
+    <h2>联系与变更</h2>
+    <p>
+      产品迭代可能更新本说明。仓库与发行说明见
+      <a href="https://github.com/yuwhisper/account">github.com/yuwhisper/account</a>。
+    </p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">语声记账</string>
+    <string name="notification_listener_label">语声记账通知监听</string>
+    <string name="accessibility_service_label">语声记账无障碍</string>
+    <string name="accessibility_service_description">用于读取微信、支付宝等付款成功页上的金额与商户信息，以便弹出确认入账。不会采集与记账无关的屏幕内容。</string>
+</resources>
