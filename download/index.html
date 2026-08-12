@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>语声记账 — 下载</title>
+  <style>
+    :root {
+      --bg: #f6f3ee;
+      --ink: #1c2a24;
+      --muted: #5a6b63;
+      --accent: #1f8a70;
+      --line: #d9e0db;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #e7f5ef 0%, transparent 55%),
+        radial-gradient(900px 400px at 100% 0%, #efe8dc 0%, transparent 50%),
+        var(--bg);
+      line-height: 1.6;
+    }
+    main {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    h1 { font-size: 2rem; margin: 0 0 0.35rem; letter-spacing: 0.02em; }
+    .meta { color: var(--muted); margin-bottom: 1.5rem; }
+    .card {
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 1.25rem 1.35rem;
+      margin: 1rem 0;
+    }
+    h2 { font-size: 1.15rem; margin: 0 0 0.75rem; }
+    ul { margin: 0; padding-left: 1.2rem; }
+    li { margin: 0.35rem 0; }
+    a { color: var(--accent); }
+    .cta {
+      display: inline-block;
+      margin-top: 0.5rem;
+      padding: 0.7rem 1.2rem;
+      background: var(--accent);
+      color: #fff;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .cta:hover { filter: brightness(1.05); }
+    .note {
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+    footer {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>语声记账</h1>
+    <p class="meta">版本 <strong id="version">0.1.0</strong>（占位，与 GitHub Release 标签一致时可更新）</p>
+
+    <section class="card">
+      <h2>下载 APK</h2>
+      <p>安装包通过 GitHub Releases 分发（不上应用商店）。</p>
+      <!-- 上传 Release 后把下方 href 换成实际 asset 直链 -->
+      <p>
+        <a class="cta" id="apk-link"
+           href="https://github.com/yuwhisper/account/releases/latest">
+          前往 GitHub Releases 下载
+        </a>
+      </p>
+      <p class="note">
+        APK 直链占位（上传后替换）：
+        <code>https://github.com/yuwhisper/account/releases/download/v0.1.0/app-release.apk</code>
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>安装说明（未知来源）</h2>
+      <ol>
+        <li>用手机浏览器打开本页或 Releases 页，下载 APK。</li>
+        <li>若系统提示「禁止安装未知应用」，请允许当前浏览器 / 文件管理器安装未知来源应用。</li>
+        <li>安装完成后按应用内引导开启自动记账所需权限。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>权限清单</h2>
+      <ul>
+        <li><strong>无障碍服务</strong> — 读取付款成功页上的金额与商户，用于弹出确认入账</li>
+        <li><strong>通知使用权</strong> — 读取微信 / 支付宝等付款通知</li>
+        <li><strong>悬浮窗</strong> — 付款后展示居中确认入账卡片</li>
+        <li><strong>通知栏权限</strong> — 显示「自动记账运行中 / 待入账」状态</li>
+        <li><strong>忽略电池优化 / 后台运行</strong> — 降低服务被系统杀掉的概率</li>
+        <li><strong>网络</strong> — 登录与云同步流水、分类</li>
+        <li><strong>震动</strong>（可选体验）— 确认相关反馈</li>
+        <li><strong>短信</strong>（可选，默认关闭）— 不阻塞主流程</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>隐私</h2>
+      <p>
+        无障碍与通知仅用于识别收付款信息以完成记账；不出售数据。
+        详见 <a href="./privacy.html">隐私说明</a>。
+      </p>
+    </section>
+
+    <footer>
+      仓库：<a href="https://github.com/yuwhisper/account">yuwhisper/account</a>
+    </footer>
+  </main>
+</body>
+</html>
