@@ -29,6 +29,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.yuwhisper.account.capture.AutoBookkeepingPrefs
 import com.yuwhisper.account.data.LedgerRepository
+import com.yuwhisper.account.sync.SyncWorker
+import com.yuwhisper.account.ui.auth.LoginScreen
 import com.yuwhisper.account.ui.category.CategoryScreen
 import com.yuwhisper.account.ui.ledger.LedgerScreen
 import com.yuwhisper.account.ui.manual.ManualEntryScreen
@@ -45,6 +47,7 @@ private object Routes {
     const val MANUAL = "manual"
     const val WATCH_APPS = "watch_apps"
     const val PERMISSION_ONBOARDING = "permission_onboarding"
+    const val LOGIN = "login"
 }
 
 private data class TabItem(
@@ -143,6 +146,16 @@ fun AccountRoot(repository: LedgerRepository) {
                     },
                     onOpenWatchApps = { navController.navigate(Routes.WATCH_APPS) },
                     onOpenPermissionOnboarding = { openPermissionOnboarding() },
+                    onOpenLogin = { navController.navigate(Routes.LOGIN) },
+                )
+            }
+            composable(Routes.LOGIN) {
+                LoginScreen(
+                    onBack = { navController.popBackStack() },
+                    onAuthed = {
+                        SyncWorker.enqueueNow(context)
+                        navController.popBackStack()
+                    },
                 )
             }
             composable(Routes.WATCH_APPS) {

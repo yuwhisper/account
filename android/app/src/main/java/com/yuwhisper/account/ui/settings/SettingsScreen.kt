@@ -43,6 +43,8 @@ import com.yuwhisper.account.capture.AutoLedgerPermissions
 import com.yuwhisper.account.capture.ConfirmDispatcher
 import com.yuwhisper.account.capture.PermissionStep
 import com.yuwhisper.account.domain.Candidate
+import com.yuwhisper.account.sync.AuthRepository
+import com.yuwhisper.account.sync.SyncWorker
 import com.yuwhisper.account.ui.theme.AccountMutedColor
 import kotlinx.coroutines.launch
 import java.io.File
@@ -56,12 +58,16 @@ fun SettingsScreen(
     onExportCsv: (file: File, onDone: () -> Unit, onError: (String) -> Unit) -> Unit,
     onOpenWatchApps: () -> Unit,
     onOpenPermissionOnboarding: () -> Unit,
+    onOpenLogin: () -> Unit,
 ) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
+    val auth = remember { AuthRepository(context) }
 
+    var loggedInEmail by remember { mutableStateOf(auth.currentEmail()) }
+    var baseUrlPreview by remember { mutableStateOf(auth.getBaseUrl()) }
     var masterEnabled by remember {
         mutableStateOf(AutoBookkeepingPrefs.isMasterEnabled(context))
     }
@@ -82,6 +88,8 @@ fun SettingsScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 masterEnabled = AutoBookkeepingPrefs.isMasterEnabled(context)
+                loggedInEmail = auth.currentEmail()
+                baseUrlPreview = auth.getBaseUrl()
                 refreshPermissionStatus()
             }
         }
@@ -191,6 +199,45 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("识别场景")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("云同步", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (loggedInEmail.isNullOrBlank()) {
+                    "未登录：仅本地记账。服务器：$baseUrlPreview"
+                } else {
+                    "已登录：$loggedInEmail\n服务器：$baseUrlPreview"
+                },
+                color = AccountMutedColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Button(
+                onClick = onOpenLogin,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (loggedInEmail.isNullOrBlank()) "登录 / 注册" else "账号与服务器")
+            }
+            if (!loggedInEmail.isNullOrBlank()) {
+                OutlinedButton(
+                    onClick = {
+                        SyncWorker.enqueueNow(context)
+                        scope.launch { snackbar.showSnackbar("已开始同步") }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("立即同步")
+                }
+                OutlinedButton(
+                    onClick = {
+                        auth.logout()
+                        loggedInEmail = null
+                        scope.launch { snackbar.showSnackbar("已退出登录") }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("退出登录")
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))

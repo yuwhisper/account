@@ -19,6 +19,18 @@ interface CategoryDao {
     @Query("SELECT COUNT(*) FROM categories")
     suspend fun count(): Int
 
+    @Query("SELECT * FROM categories WHERE pendingSync = 1")
+    suspend fun getPendingSync(): List<CategoryEntity>
+
+    @Query("SELECT * FROM categories WHERE serverId = :serverId LIMIT 1")
+    suspend fun findByServerId(serverId: Long): CategoryEntity?
+
+    @Query("SELECT * FROM categories WHERE name = :name LIMIT 1")
+    suspend fun findByName(name: String): CategoryEntity?
+
+    @Query("SELECT * FROM categories WHERE clientId = :clientId LIMIT 1")
+    suspend fun findByClientId(clientId: String): CategoryEntity?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: CategoryEntity): Long
 

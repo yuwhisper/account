@@ -25,11 +25,16 @@ import java.util.UUID
 class LedgerRepository(
     private val database: AppDatabase,
     private val ensureSeeded: suspend () -> Unit,
+    private val onLocalDataChanged: (() -> Unit)? = null,
 ) {
     private val transactionDao get() = database.transactionDao()
     private val categoryDao get() = database.categoryDao()
     private val pendingPaymentDao get() = database.pendingPaymentDao()
     private val watchAppDao get() = database.watchAppDao()
+
+    private fun notifyPendingSync() {
+        onLocalDataChanged?.invoke()
+    }
 
     fun observeTransactions(): Flow<List<TransactionEntity>> = flow {
         ensureSeeded()
@@ -83,6 +88,7 @@ class LedgerRepository(
                 pendingSync = true,
             ),
         )
+        notifyPendingSync()
     }
 
     suspend fun upsertCategory(
@@ -95,7 +101,7 @@ class LedgerRepository(
         require(trimmed.isNotEmpty()) { "category name required" }
         val now = Instant.now()
         return if (localId == null || localId == 0L) {
-            categoryDao.insert(
+            val id = categoryDao.insert(
                 CategoryEntity(
                     clientId = UUID.randomUUID().toString(),
                     name = trimmed,
@@ -104,6 +110,8 @@ class LedgerRepository(
                     pendingSync = true,
                 ),
             )
+            notifyPendingSync()
+            id
         } else {
             val existing = categoryDao.getAll().firstOrNull { it.localId == localId }
                 ?: error("category not found: $localId")
@@ -115,6 +123,7 @@ class LedgerRepository(
                     pendingSync = true,
                 ),
             )
+            notifyPendingSync()
             localId
         }
     }
@@ -174,6 +183,7 @@ class LedgerRepository(
             ),
         )
         pendingPaymentDao.deleteByLocalId(pendingLocalId)
+        notifyPendingSync()
     }
 
     /**

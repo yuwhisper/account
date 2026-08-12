@@ -7,6 +7,8 @@ import com.yuwhisper.account.capture.PendingPaymentNotifier
 import com.yuwhisper.account.data.LedgerRepository
 import com.yuwhisper.account.data.local.AppDatabase
 import com.yuwhisper.account.data.local.seedIfEmpty
+import com.yuwhisper.account.sync.SyncWorker
+import com.yuwhisper.account.sync.TokenStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,11 +40,20 @@ class AccountApp : Application() {
         ledgerRepository = LedgerRepository(
             database = database,
             ensureSeeded = { ensureSeeded() },
+            onLocalDataChanged = {
+                if (TokenStore(this).isLoggedIn()) {
+                    SyncWorker.enqueueNow(this)
+                }
+            },
         )
         PendingPaymentNotifier.ensureChannel(this)
         AutoBookkeepingStatusService.refresh(this)
         // Warm up seed in background; callers must still await ensureSeeded().
         seedDeferred.start()
+        if (TokenStore(this).isLoggedIn()) {
+            SyncWorker.ensurePeriodic(this)
+            SyncWorker.enqueueNow(this)
+        }
     }
 
     /** Suspend until first-open seed finishes. Re-throws after logging on failure. */
