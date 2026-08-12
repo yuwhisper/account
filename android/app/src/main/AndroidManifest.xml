@@ -34,11 +34,16 @@
             android:name=".ui.confirm.ConfirmPaymentActivity"
             android:excludeFromRecents="true"
             android:exported="false"
-            android:launchMode="singleTop"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:theme="@style/Theme.YuWhisperAccount.Confirm"
             android:windowSoftInputMode="adjustResize" />
+
+        <service
+            android:name=".capture.ConfirmOverlayService"
+            android:exported="false" />
 
         <service
             android:name=".capture.PaymentNotificationListener"

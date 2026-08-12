@@ -8,14 +8,16 @@ import com.yuwhisper.account.data.local.entity.PendingPaymentEntity
 import com.yuwhisper.account.domain.Candidate
 import com.yuwhisper.account.domain.Dedupe
 import com.yuwhisper.account.ui.confirm.ConfirmPaymentActivity
+import com.yuwhisper.account.capture.ConfirmOverlayService
 import kotlinx.coroutines.launch
 import java.time.Instant
 
 /**
  * Unified entry for payment candidates from notification / accessibility / debug.
  *
- * Flow: dedupe → write pending → try confirm UI → fallback「待入账」notification.
- * There is no ignore path; back from confirm keeps the pending row.
+ * Prefers SYSTEM_ALERT_WINDOW overlay so WeChat/Alipay stay underneath;
+ * falls back to translucent activity, then「待入账」notification.
+ * There is no ignore path; dismiss keeps the pending row.
  */
 object ConfirmDispatcher {
 
@@ -74,8 +76,9 @@ object ConfirmDispatcher {
             ),
         )
 
-        val started = tryStartConfirm(app, pendingId)
-        if (!started) {
+        // Prefer floating overlay (stay on WeChat/Alipay); fall back to translucent activity.
+        val shown = ConfirmOverlayService.show(app, pendingId) || tryStartConfirmActivity(app, pendingId)
+        if (!shown) {
             PendingPaymentNotifier.show(
                 context = app,
                 pendingId = pendingId,
@@ -86,9 +89,11 @@ object ConfirmDispatcher {
         }
     }
 
-    private fun tryStartConfirm(app: AccountApp, pendingId: Long): Boolean {
+    private fun tryStartConfirmActivity(app: AccountApp, pendingId: Long): Boolean {
         val intent = ConfirmPaymentActivity.createIntent(app, pendingId).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
+                Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
         }
         return runCatching {
             app.startActivity(intent)

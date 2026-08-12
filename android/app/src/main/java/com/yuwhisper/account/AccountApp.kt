@@ -47,11 +47,13 @@ class AccountApp : Application() {
             },
         )
         PendingPaymentNotifier.ensureChannel(this)
+        // Do not start sticky FGS by default — only if user opts into status notification.
         AutoBookkeepingStatusService.refresh(this)
         // Warm up seed in background; callers must still await ensureSeeded().
         seedDeferred.start()
         if (TokenStore(this).isLoggedIn()) {
             SyncWorker.ensurePeriodic(this)
+            // Debounced; avoid immediate sync storm on every cold start.
             SyncWorker.enqueueNow(this)
         }
     }

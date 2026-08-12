@@ -29,7 +29,9 @@ class AutoBookkeepingStatusService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ensureChannel()
-        if (!AutoBookkeepingPrefs.isMasterEnabled(this)) {
+        val master = AutoBookkeepingPrefs.isMasterEnabled(this)
+        val showStatus = AutoBookkeepingPrefs.isShowStatusNotification(this)
+        if (!master || !showStatus) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
@@ -47,7 +49,8 @@ class AutoBookkeepingStatusService : Service() {
                 0
             },
         )
-        return START_STICKY
+        // Don't stick forever if user turns prefs off later — refresh() stops us.
+        return START_NOT_STICKY
     }
 
     private fun buildNotification(running: Boolean): Notification {
@@ -128,7 +131,10 @@ class AutoBookkeepingStatusService : Service() {
         fun refresh(context: Context) {
             val appContext = context.applicationContext
             val intent = Intent(appContext, AutoBookkeepingStatusService::class.java)
-            if (AutoBookkeepingPrefs.isMasterEnabled(appContext)) {
+            val want =
+                AutoBookkeepingPrefs.isMasterEnabled(appContext) &&
+                    AutoBookkeepingPrefs.isShowStatusNotification(appContext)
+            if (want) {
                 ContextCompat.startForegroundService(appContext, intent)
             } else {
                 appContext.stopService(intent)

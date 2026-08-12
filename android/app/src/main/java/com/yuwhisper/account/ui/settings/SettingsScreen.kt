@@ -71,6 +71,9 @@ fun SettingsScreen(
     var masterEnabled by remember {
         mutableStateOf(AutoBookkeepingPrefs.isMasterEnabled(context))
     }
+    var showStatusNotification by remember {
+        mutableStateOf(AutoBookkeepingPrefs.isShowStatusNotification(context))
+    }
     var permissionSteps by remember {
         mutableStateOf(AutoLedgerPermissions.steps(context))
     }
@@ -88,6 +91,7 @@ fun SettingsScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 masterEnabled = AutoBookkeepingPrefs.isMasterEnabled(context)
+                showStatusNotification = AutoBookkeepingPrefs.isShowStatusNotification(context)
                 loggedInEmail = auth.currentEmail()
                 baseUrlPreview = auth.getBaseUrl()
                 refreshPermissionStatus()
@@ -151,7 +155,7 @@ fun SettingsScreen(
         ) {
             Text("自动记账", style = MaterialTheme.typography.titleMedium)
             Text(
-                "总开关开启且核心权限齐全时，通知栏显示「自动记账运行中」。",
+                "付款后用悬浮窗弹出确认卡，不必跳进本应用。默认不常驻前台服务，更省电。",
                 color = AccountMutedColor,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -165,7 +169,7 @@ fun SettingsScreen(
                     Text(
                         when {
                             !masterEnabled -> "状态：关闭"
-                            permissionsReady -> "状态：运行中"
+                            permissionsReady -> "状态：已开启（事件触发时唤醒）"
                             else -> "状态：权限未齐（请完成引导）"
                         },
                         color = AccountMutedColor,
@@ -175,6 +179,28 @@ fun SettingsScreen(
                 Switch(
                     checked = masterEnabled,
                     onCheckedChange = { setMasterEnabled(it) },
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text("常驻运行状态通知", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "开启后会以前台服务显示「运行中」，更费电；默认关闭。",
+                        color = AccountMutedColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Switch(
+                    checked = showStatusNotification,
+                    onCheckedChange = {
+                        AutoBookkeepingPrefs.setShowStatusNotification(context, it)
+                        showStatusNotification = it
+                        AutoBookkeepingStatusService.refresh(context)
+                    },
                 )
             }
 

@@ -1,17 +1,20 @@
 package com.yuwhisper.account.ui.ledger
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -19,10 +22,16 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +44,7 @@ import com.yuwhisper.account.ui.theme.AccountExpenseColor
 import com.yuwhisper.account.ui.theme.AccountIncomeColor
 import com.yuwhisper.account.ui.theme.AccountMutedColor
 import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.layout.Spacer as LayoutSpacer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,10 +52,15 @@ fun LedgerScreen(
     days: List<LedgerDayGroup>,
     onAddClick: () -> Unit,
 ) {
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("\u6d41\u6c34") },
+                title = {
+                    Text(text = "\u6d41\u6c34", fontWeight = FontWeight.SemiBold)
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
@@ -56,6 +71,7 @@ fun LedgerScreen(
                 onClick = onAddClick,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(18.dp),
             ) {
                 Icon(Icons.Default.Add, contentDescription = "\u8bb0\u4e00\u7b14")
             }
@@ -63,34 +79,44 @@ fun LedgerScreen(
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         if (days.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
+            AnimatedVisibility(
+                visible = entered,
+                enter = fadeIn() + slideInVertically { it / 8 },
             ) {
-                Text("\u8fd8\u6ca1\u6709\u6d41\u6c34", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "\u70b9\u53f3\u4e0b\u89d2\u300c\u8bb0\u4e00\u7b14\u300d\u5f00\u59cb\u8bb0\u5f55",
-                    color = AccountMutedColor,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("\u8fd8\u6ca1\u6709\u6d41\u6c34", style = MaterialTheme.typography.titleMedium)
+                    LayoutSpacer(Modifier.height(8.dp))
+                    Text(
+                        "\u70b9\u53f3\u4e0b\u89d2\u300c\u8bb0\u4e00\u7b14\u300d\uff0c\u6216\u4ed8\u6b3e\u540e\u81ea\u52a8\u5f39\u51fa\u786e\u8ba4\u5361",
+                        color = AccountMutedColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         } else {
             LazyColumn(
-                modifier = Modifier
+                Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(days, key = { it.date.toString() }) { day ->
-                    DaySection(day)
+                itemsIndexed(days, key = { _, day -> day.date.toString() }) { _, day ->
+                    AnimatedVisibility(
+                        visible = entered,
+                        enter = fadeIn() + slideInVertically { it / 10 },
+                    ) {
+                        DaySection(day)
+                    }
                 }
-                item { Spacer(Modifier.height(72.dp)) }
+                item { LayoutSpacer(Modifier.height(72.dp)) }
             }
         }
     }
@@ -99,31 +125,39 @@ fun LedgerScreen(
 @Composable
 private fun DaySection(day: LedgerDayGroup) {
     val dateLabel = day.date.format(DateTimeFormatter.ofPattern("M\u6708d\u65e5 EEEE"))
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                color = MaterialTheme.colorScheme.surface,
-                shape = MaterialTheme.shapes.medium,
-            )
-            .padding(14.dp),
+    Surface(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(dateLabel, fontWeight = FontWeight.SemiBold)
-            Text(
-                "\u652f\u51fa \u00a5${day.expenseCents.centsToYuanText()}",
-                color = AccountMutedColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        day.items.forEach { item ->
-            TransactionRow(item)
-            Spacer(Modifier.height(6.dp))
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(dateLabel, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "\u652f\u51fa \u00a5${day.expenseCents.centsToYuanText()}",
+                    color = AccountMutedColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            LayoutSpacer(Modifier.height(10.dp))
+            day.items.forEachIndexed { index, item ->
+                if (index > 0) {
+                    LayoutSpacer(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .padding(vertical = 6.dp)
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                    )
+                }
+                TransactionRow(item)
+            }
         }
     }
 }
@@ -134,12 +168,18 @@ private fun TransactionRow(item: LedgerItemUi) {
     val amountColor = if (isExpense) AccountExpenseColor else AccountIncomeColor
     val sign = if (isExpense) "-" else "+"
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(item.merchant, style = MaterialTheme.typography.bodyLarge)
+        Column(Modifier.weight(1f)) {
+            Text(
+                item.merchant,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+            )
             Text(
                 buildString {
                     append(item.categoryName)
@@ -152,7 +192,7 @@ private fun TransactionRow(item: LedgerItemUi) {
         Text(
             "$sign\u00a5${item.amountCents.centsToYuanText()}",
             color = amountColor,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }

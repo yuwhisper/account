@@ -45,6 +45,7 @@ class ConfirmPaymentActivity : ComponentActivity() {
                     pending = pending,
                     categories = categories,
                     loadError = loadError,
+                    animateIn = true,
                     onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
                         lifecycleScope.launch {
                             runCatching {
@@ -59,13 +60,17 @@ class ConfirmPaymentActivity : ComponentActivity() {
                             }.onSuccess {
                                 onDone()
                                 finish()
+                                overridePendingTransition(0, android.R.anim.fade_out)
                             }.onFailure { e ->
                                 Log.e(TAG, "confirm failed", e)
                                 onError(e.message ?: "确认失败")
                             }
                         }
                     },
-                    onDismissKeepPending = { finish() },
+                    onDismissKeepPending = {
+                        finish()
+                        overridePendingTransition(0, android.R.anim.fade_out)
+                    },
                 )
             }
         }
