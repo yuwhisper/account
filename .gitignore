@@ -1,0 +1,11 @@
+
+.worktrees/
+.venv/
+__pycache__/
+*.pyc
+local.properties
+keystore.properties
+*.jks
+*.apk
+.idea/
+
