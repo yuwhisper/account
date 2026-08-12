@@ -30,3 +30,15 @@ def client():
         yield c
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture()
+def auth_header(client):
+    email = "cat@example.com"
+    password = "secret123"
+    r = client.post("/api/auth/register", json={"email": email, "password": password})
+    assert r.status_code == 201
+    r = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert r.status_code == 200
+    token = r.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

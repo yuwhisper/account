@@ -1,12 +1,30 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import create_access_token, hash_password, verify_password
 from app.db import get_db
-from app.models import User
+from app.models import Category, User
 from app.schemas import Token, UserCreate, UserLogin
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+SEED_CATEGORIES = ["餐饮", "交通", "购物", "住房", "娱乐", "医疗", "教育", "其他"]
+
+
+def seed_categories_for_user(db: Session, user_id: int) -> None:
+    now = datetime.now(timezone.utc)
+    for i, name in enumerate(SEED_CATEGORIES):
+        db.add(
+            Category(
+                user_id=user_id,
+                name=name,
+                sort_order=(i + 1) * 10,
+                updated_at=now,
+            )
+        )
+    db.commit()
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -18,6 +36,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> dict:
     db.add(user)
     db.commit()
     db.refresh(user)
+    seed_categories_for_user(db, user.id)
     return {"id": user.id, "email": user.email}
 
 
