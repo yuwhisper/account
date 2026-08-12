@@ -27,6 +27,7 @@ import com.yuwhisper.account.ui.category.CategoryScreen
 import com.yuwhisper.account.ui.ledger.LedgerScreen
 import com.yuwhisper.account.ui.manual.ManualEntryScreen
 import com.yuwhisper.account.ui.settings.SettingsScreen
+import com.yuwhisper.account.ui.settings.WatchAppsScreen
 import com.yuwhisper.account.ui.stats.StatsScreen
 
 private object Routes {
@@ -35,6 +36,7 @@ private object Routes {
     const val CATEGORY = "category"
     const val SETTINGS = "settings"
     const val MANUAL = "manual"
+    const val WATCH_APPS = "watch_apps"
 }
 
 private data class TabItem(
@@ -50,6 +52,7 @@ fun AccountRoot(repository: LedgerRepository) {
     val days by vm.ledgerDays.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val stats by vm.monthStats.collectAsStateWithLifecycle()
+    val watchApps by vm.watchApps.collectAsStateWithLifecycle()
 
     val tabs = listOf(
         TabItem(Routes.LEDGER, "\u6d41\u6c34", Icons.AutoMirrored.Filled.List),
@@ -115,6 +118,16 @@ fun AccountRoot(repository: LedgerRepository) {
                     onExportCsv = { file, onDone, onError ->
                         vm.exportCsv(file, onDone, onError)
                     },
+                    onOpenWatchApps = { navController.navigate(Routes.WATCH_APPS) },
+                )
+            }
+            composable(Routes.WATCH_APPS) {
+                WatchAppsScreen(
+                    apps = watchApps,
+                    onToggle = { packageName, enabled ->
+                        vm.setWatchAppEnabled(packageName, enabled)
+                    },
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(Routes.MANUAL) {

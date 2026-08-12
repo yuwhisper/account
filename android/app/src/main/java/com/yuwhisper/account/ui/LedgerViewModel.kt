@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.yuwhisper.account.data.LedgerRepository
 import com.yuwhisper.account.data.local.entity.CategoryEntity
 import com.yuwhisper.account.data.local.entity.TransactionEntity
+import com.yuwhisper.account.data.local.entity.WatchAppEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -25,6 +26,9 @@ class LedgerViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val transactions: StateFlow<List<TransactionEntity>> = repository.observeTransactions()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val watchApps: StateFlow<List<WatchAppEntity>> = repository.observeWatchApps()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val ledgerDays: StateFlow<List<LedgerDayGroup>> = combine(transactions, categories) { txs, cats ->
@@ -132,6 +136,13 @@ class LedgerViewModel(
             runCatching { repository.exportCsv(file) }
                 .onSuccess { onDone() }
                 .onFailure { onError(it.message ?: "\u5bfc\u51fa\u5931\u8d25") }
+        }
+    }
+
+    fun setWatchAppEnabled(packageName: String, enabled: Boolean) {
+        viewModelScope.launch {
+            runCatching { repository.setWatchAppEnabled(packageName, enabled) }
+                .onFailure { /* UI already optimistic via Flow */ }
         }
     }
 

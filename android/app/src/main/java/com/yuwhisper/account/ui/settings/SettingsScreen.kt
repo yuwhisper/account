@@ -44,6 +44,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun SettingsScreen(
     onExportCsv: (file: File, onDone: () -> Unit, onError: (String) -> Unit) -> Unit,
+    onOpenWatchApps: () -> Unit,
 ) {
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
@@ -98,6 +99,20 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Text("自动记账", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "选择要监听的支付 App，并在系统中开启通知使用权。",
+                color = AccountMutedColor,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Button(
+                onClick = onOpenWatchApps,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("识别场景")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
             Text("数据", style = MaterialTheme.typography.titleMedium)
             Text(
                 "CSV header: occurred_at,type,amount,merchant,source,category,note; amount is yuan with 2 decimals.",
@@ -153,13 +168,6 @@ fun SettingsScreen(
             ) {
                 Text("模拟一笔付款")
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "自动记账权限与云同步设置将在后续任务接入。",
-                color = AccountMutedColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
         }
     }
 }

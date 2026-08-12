@@ -4,6 +4,7 @@ import com.yuwhisper.account.data.local.AppDatabase
 import com.yuwhisper.account.data.local.entity.CategoryEntity
 import com.yuwhisper.account.data.local.entity.PendingPaymentEntity
 import com.yuwhisper.account.data.local.entity.TransactionEntity
+import com.yuwhisper.account.data.local.entity.WatchAppEntity
 import com.yuwhisper.account.domain.Candidate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -28,6 +29,7 @@ class LedgerRepository(
     private val transactionDao get() = database.transactionDao()
     private val categoryDao get() = database.categoryDao()
     private val pendingPaymentDao get() = database.pendingPaymentDao()
+    private val watchAppDao get() = database.watchAppDao()
 
     fun observeTransactions(): Flow<List<TransactionEntity>> = flow {
         ensureSeeded()
@@ -37,6 +39,21 @@ class LedgerRepository(
     fun observeCategories(): Flow<List<CategoryEntity>> = flow {
         ensureSeeded()
         emitAll(categoryDao.observeAll())
+    }
+
+    fun observeWatchApps(): Flow<List<WatchAppEntity>> = flow {
+        ensureSeeded()
+        emitAll(watchAppDao.observeAll())
+    }
+
+    suspend fun isWatchAppEnabled(packageName: String): Boolean {
+        ensureSeeded()
+        return watchAppDao.getAll().any { it.packageName == packageName && it.enabled }
+    }
+
+    suspend fun setWatchAppEnabled(packageName: String, enabled: Boolean) {
+        ensureSeeded()
+        watchAppDao.setEnabled(packageName, enabled)
     }
 
     suspend fun addManualTransaction(
