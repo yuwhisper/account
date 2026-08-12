@@ -4,9 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import Base, engine
-from app.models import Category, User  # noqa: F401 — register ORM metadata
+from app.models import Category, Transaction, User  # noqa: F401 — register ORM metadata
 from app.routers import auth as auth_router
 from app.routers import categories as categories_router
+from app.routers import transactions as transactions_router
 
 
 @asynccontextmanager
@@ -25,3 +26,4 @@ app.add_middleware(
 )
 app.include_router(auth_router.router)
 app.include_router(categories_router.router)
+app.include_router(transactions_router.router)

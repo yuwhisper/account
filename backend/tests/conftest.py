@@ -42,3 +42,12 @@ def auth_header(client):
     assert r.status_code == 200
     token = r.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def category_id(client, auth_header):
+    r = client.get("/api/categories", headers=auth_header)
+    assert r.status_code == 200
+    cats = r.json()
+    assert len(cats) >= 1
+    return cats[0]["id"]

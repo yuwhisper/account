@@ -46,3 +46,39 @@ class CategoryOut(BaseModel):
     client_id: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+
+class TransactionIn(BaseModel):
+    client_id: str = Field(min_length=1, max_length=64)
+    amount_cents: int
+    merchant: str = ""
+    source: str = ""
+    category_id: Optional[int] = None
+    note: str = ""
+    occurred_at: datetime
+    updated_at: datetime
+    type: str = Field(pattern="^(expense|income)$")
+
+
+class TransactionPushRequest(BaseModel):
+    transactions: list[TransactionIn]
+
+
+class TransactionOut(BaseModel):
+    id: int
+    client_id: str
+    amount_cents: int
+    merchant: str
+    source: str
+    category_id: Optional[int] = None
+    note: str
+    occurred_at: datetime
+    updated_at: datetime
+    type: str
+
+    model_config = {"from_attributes": True}
+
+
+class TransactionPullResponse(BaseModel):
+    transactions: list[TransactionOut]
+    server_time: datetime
