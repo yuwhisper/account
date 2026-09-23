@@ -15,4 +15,7 @@ keystore.properties
 **/build/
 android/.gradle/
 android/**/build/
+.build/
+.swiftpm/
+ios/**/xcuserdata/
 

@@ -9,6 +9,7 @@ Android 原生客户端 + FastAPI 后端：付款通知 / 无障碍双通道捕�
 | 路径 | 说明 |
 |------|------|
 | `android/` | Kotlin 客户端 |
+| `ios/` | Swift 客户端。截图识别后确认入账 |
 | `backend/` | FastAPI 服务 |
 | `download/` | APK 下载页、隐私说明、验收清单 |
 | `docs/superpowers/` | 规格与实现计划 |
@@ -28,6 +29,21 @@ python -m venv .venv
 - 开发用 JWT `SECRET_KEY` 见 `backend/app/config.py`，上线务必更换
 
 更多说明见 [`backend/README.md`](backend/README.md)。
+
+## 打开 iOS 工程
+
+用 Xcode 打开 `ios/YuWhisperAccount.xcodeproj`（需要完整 Xcode，不能只用 Command Line Tools）。签名里给 App 和 Share Extension 都选同一个 Team，并确认 App Group `group.com.yuwhisper.account` 已启用。
+
+iOS 不能读取微信 / 支付宝的通知或页面。自动记账的做法是：付款成功后截屏，用「快捷指令 → 自动化 → 截屏时」把最新截图交给「识别付款截图」。也可以从相册识别，或把截图分享到「语声记账」。识别结果只进待确认，选分类后才入账，登录后走同一套后端同步。
+
+模拟器访问本机后端用 `http://127.0.0.1:8000`。真机改成电脑的局域网地址。
+
+不装 Xcode 时，可以在 Mac 上跑解析和入账检查：
+
+```bash
+cd ios/LedgerCore
+swift run LedgerCoreChecks
+```
 
 ## 打开 Android 工程
 
