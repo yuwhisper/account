@@ -22,36 +22,60 @@ data class ParsedPayment(
  */
 object PaymentParser {
 
-    /** Strong signals that a payment just finished (safe for accessibility). */
+    /** Strong signals that an *outgoing* payment just finished (safe for accessibility). */
     private val STRONG_SUCCESS_HINTS = listOf(
         "支付成功",
         "付款成功",
         "交易成功",
         "支付完成",
-        "已支付",
-        "收款成功",
         "你已成功付款",
-        "扣款成功",
-        "已付款",
-        "支付成功，",
         "转账成功",
         "已转账",
         "待朋友确认收款",
         "待确认收款",
-        "朋友已确认收款",
-        // WeChat red packet (send / claim result pages)
         "红包发送成功",
         "已发送红包",
         "红包已发送",
         "你发了一个红包",
         "你发了一个拼手气红包",
         "看看大家的手气",
-        "等待对方领取",
-        "红包金额",
-        "已存入对方零钱",
-        "已存入零钱",
+        "未领取的红包",
         "发出红包",
         "红包已发出",
+    )
+
+    private val INCOME_HINTS = listOf(
+        "收款成功",
+        "已存入零钱",
+        "收到红包",
+        "红包已领取",
+        "收款到账",
+        "退款成功",
+        "退款入账",
+        "二维码收款",
+    )
+
+    private val SUCCESS_BANNER_EXACT = setOf(
+        "支付成功",
+        "付款成功",
+        "交易成功",
+        "支付完成",
+        "转账成功",
+        "已转账",
+        "红包发送成功",
+        "红包已发送",
+        "已发送红包",
+        "你发了一个红包",
+        "你发了一个拼手气红包",
+        "待朋友确认收款",
+        "待确认收款",
+    )
+
+    private val RED_PACKET_EDITOR_HINTS = listOf(
+        "塞钱进红包",
+        "塞进红包",
+        "单个金额",
+        "红包个数",
     )
 
     /** Weaker copy — OK for notifications, too noisy alone on WeChat UI tree. */
@@ -84,7 +108,7 @@ object PaymentParser {
 
     private val NODE_MONEY = Regex("""^[¥￥]?\s*([\d,]+)\.(\d{1,2})\s*$""")
     private val NODE_YUAN_ONLY = Regex("""^[¥￥]\s*([\d,]+(?:\.\d{1,2})?)\s*$""")
-    private val NODE_DECIMAL = Regex("""^([\d,]+)\.(\d{2})$""")
+    private val NODE_DECIMAL = Regex("""^([\d,]+)\.(\d{1,2})$""")
 
     private val WECHAT_MERCHANT_PATTERNS = listOf(
         Regex("""收款方商家[：:]\s*(.+)"""),
@@ -144,38 +168,108 @@ object PaymentParser {
         STRONG_SUCCESS_HINTS.any { blob.contains(it) } ||
             WEAK_SUCCESS_HINTS.any { blob.contains(it) }
 
+    fun looksLikeIncome(blob: String): Boolean {
+        if (blob.contains("已存入对方零钱")) return false
+        return INCOME_HINTS.any { blob.contains(it) }
+    }
+
     fun looksLikeStrongPaymentSuccess(blob: String): Boolean {
+        if (looksLikeIncome(blob)) return false
         if (STRONG_SUCCESS_HINTS.any { blob.contains(it) }) return true
-        // Transfer result without the exact "转账成功" string.
-        if ((blob.contains("转账") && (
+        // Transfer result without the exact "转账成功" string. Do NOT use 零钱 —
+        // Alipay home shows 转账入口 + 余额/零钱 + 金额, which would fire every visit.
+        if (blob.contains("转账") && (
                 blob.contains("确认收款") ||
                     blob.contains("已转账") ||
-                    blob.contains("转账成功") ||
-                    blob.contains("零钱")
-                )) && extractAmountCents(blob) != null
+                    blob.contains("转账成功")
+                ) && extractAmountCents(blob) != null
         ) {
             return true
         }
-        // Red-packet result page often shows "红包" without "支付成功".
-        // Avoid pre-pay "塞钱进红包" editor and chat history noise.
-        if (blob.contains("红包") && (
-                blob.contains("已发送") ||
-                    blob.contains("发送成功") ||
-                    blob.contains("已发出") ||
-                    blob.contains("你发了") ||
-                    blob.contains("手气") ||
-                    blob.contains("等待对方领取") ||
-                    blob.contains("已存入")
-                ) && extractAmountCents(blob) != null
+        if (blob.contains("红包") && looksLikeRedPacketSendCopy(blob) &&
+            extractAmountCents(blob) != null
         ) {
             return true
         }
         return false
     }
 
+    fun hasDedicatedSuccessBanner(texts: List<String>): Boolean =
+        texts.any { t ->
+            val trimmed = t.trim()
+            trimmed in SUCCESS_BANNER_EXACT ||
+                trimmed.contains("待朋友确认收款") ||
+                trimmed.contains("未领取的红包") ||
+                trimmed.contains("看看大家的手气") ||
+                trimmed.contains("你已成功付款") ||
+                (trimmed.contains("红包") && (
+                    trimmed.contains("已发送") ||
+                        trimmed.contains("发送成功") ||
+                        trimmed.contains("已发出")
+                    ))
+        }
+
+    fun looksLikeWeChatChatShell(texts: List<String>): Boolean =
+        texts.any {
+            it == "按住 说话" || it == "按住说话" ||
+                it.contains("切换到键盘") || it.contains("切换到语音")
+        }
+
+    fun looksLikeAlipayHome(texts: List<String>): Boolean {
+        if (hasDedicatedSuccessBanner(texts)) return false
+        val tabs = listOf("首页", "理财", "消息", "我的")
+        val tabHits = tabs.count { tab -> texts.any { it.trim() == tab } }
+        if (tabHits >= 3) return true
+        val homeBits = listOf("余额", "花呗", "余额宝", "银行卡").count { key ->
+            texts.any { it.contains(key) }
+        }
+        val shortcuts = texts.any {
+            val t = it.trim()
+            t == "转账" || t == "出行" || t == "信用卡" || t == "买单"
+        }
+        return homeBits >= 2 && shortcuts
+    }
+
+    fun looksLikeRedPacketEditor(texts: List<String>): Boolean {
+        val blob = texts.joinToString(" ")
+        return RED_PACKET_EDITOR_HINTS.any { blob.contains(it) }
+    }
+
+    fun looksLikeRedPacketSendResult(texts: List<String>): Boolean {
+        if (looksLikeRedPacketEditor(texts)) return false
+        if (looksLikeWeChatChatShell(texts)) return false
+        val blob = texts.joinToString(" ")
+        if (!blob.contains("红包")) return false
+        if (looksLikeIncome(blob)) return false
+        val hasAmount = extractAmountCents(blob) != null || extractAmountFromNodes(texts) != null
+        if (!hasAmount) return false
+        return looksLikeRedPacketSendCopy(blob) ||
+            texts.any { it.trim() == "已发送" || it.trim() == "完成" }
+    }
+
     /**
-     * Accessibility: only strong success / red-packet success (or already-parsed amount on a pay page).
-     * Notifications: strong/weak + WeChat/Alipay title heuristics.
+     * Accessibility: only a dedicated success / send-result page, never home or chat.
+     */
+    fun shouldOfferConfirmFromNodes(packageName: String, texts: List<String>): Boolean {
+        if (texts.isEmpty()) return false
+        val blob = texts.joinToString(" ")
+        if (looksLikeIncome(blob)) return false
+        if (packageName == DefaultWatchApps.ALIPAY && looksLikeAlipayHome(texts)) return false
+        if (looksLikeRedPacketEditor(texts)) return false
+        if (packageName == DefaultWatchApps.WECHAT &&
+            looksLikeWeChatChatShell(texts) &&
+            !hasDedicatedSuccessBanner(texts)
+        ) {
+            return false
+        }
+        if (hasDedicatedSuccessBanner(texts)) return true
+        if (looksLikeRedPacketSendResult(texts)) return true
+        return false
+    }
+
+    /**
+     * Notifications: strong/weak + WeChat title heuristics.
+     * Alipay notifications require a real success phrase (not just title「支付宝」+ amount).
      */
     fun shouldOfferConfirm(
         packageName: String,
@@ -185,10 +279,12 @@ object PaymentParser {
     ): Boolean {
         val blob = listOf(title, text).filter { it.isNotBlank() }.joinToString("\n")
         if (blob.isBlank()) return false
+        if (looksLikeIncome(blob)) return false
         if (accessibilityMode) {
-            if (looksLikeStrongPaymentSuccess(blob)) return true
-            // Parsed amount alone is not enough on a11y (chat noise); require pay/red-packet context.
-            return false
+            return looksLikeStrongPaymentSuccess(blob)
+        }
+        if (packageName == DefaultWatchApps.ALIPAY) {
+            return looksLikeStrongPaymentSuccess(blob)
         }
         if (parse(packageName, title, text) != null) {
             return looksLikePaymentSuccess(blob) ||
@@ -196,7 +292,6 @@ object PaymentParser {
                 title.contains("支付凭证") ||
                 title.contains("微信红包") ||
                 title.contains("红包") ||
-                title.contains("支付宝") ||
                 title.contains("付款成功") ||
                 title.contains("转账")
         }
@@ -208,13 +303,17 @@ object PaymentParser {
                 return extractAmountCents(blob) != null || looksLikePaymentSuccess(blob)
             }
         }
-        if (packageName == DefaultWatchApps.ALIPAY) {
-            if (title.contains("支付宝") || title.contains("付款")) {
-                return extractAmountCents(blob) != null || looksLikePaymentSuccess(blob)
-            }
-        }
         return false
     }
+
+    private fun looksLikeRedPacketSendCopy(blob: String): Boolean =
+        blob.contains("已发送") ||
+            blob.contains("发送成功") ||
+            blob.contains("已发出") ||
+            blob.contains("你发了") ||
+            blob.contains("手气") ||
+            blob.contains("未领取") ||
+            blob.contains("等待对方领取")
 
     private fun merchantPatternsFor(packageName: String): List<Regex> = when (packageName) {
         DefaultWatchApps.ALIPAY -> ALIPAY_MERCHANT_PATTERNS
@@ -313,7 +412,7 @@ object PaymentParser {
                 }
                 continue
             }
-            // Adjacent: "¥" + "12.34" or "¥" + "12" + ".34"
+            // Adjacent: "¥" + "12.34" or "¥" + "12" + ".34" or "1" + "元"
             if (t == "¥" || t == "￥") {
                 val next = texts.getOrNull(i + 1)?.let { normalizeMoneyText(it) }.orEmpty()
                 val next2 = texts.getOrNull(i + 2)?.let { normalizeMoneyText(it) }.orEmpty()
@@ -321,6 +420,10 @@ object PaymentParser {
                 if (next2.startsWith(".")) {
                     parseYuanToCents(next + next2)?.let { currencyCandidates.add(it) }
                 }
+            }
+            val nextNode = texts.getOrNull(i + 1)?.trim().orEmpty()
+            if ((nextNode == "元" || nextNode == "块") && t.matches(Regex("""^[\d,]+(?:\.\d{1,2})?$"""))) {
+                parseYuanToCents(t)?.let { contextualCandidates.add(0 to it) }
             }
         }
         fun valid(value: Int) = value in 1..10_000_000

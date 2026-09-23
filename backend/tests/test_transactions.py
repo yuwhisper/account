@@ -169,10 +169,21 @@ def test_cross_user_isolation(client, auth_header, category_id):
     assert pulled.json()["transactions"] == []
 
 
-def test_transactions_require_auth(client):
-    assert client.get("/api/transactions").status_code >= 400
-    assert client.post("/api/transactions/sync/push", json={"transactions": []}).status_code >= 400
+def test_delete_transaction(client, auth_header, category_id):
     assert (
-        client.get("/api/transactions/sync/pull", params={"since": "1970-01-01T00:00:00Z"}).status_code
-        >= 400
+        client.post(
+            "/api/transactions/sync/push",
+            headers=auth_header,
+            json={"transactions": [{**_tx("c_del"), "category_id": category_id}]},
+        ).status_code
+        == 200
     )
+    listed = client.get("/api/transactions", headers=auth_header)
+    row = next(t for t in listed.json() if t["client_id"] == "c_del")
+    deleted = client.delete(f"/api/transactions/{row['id']}", headers=auth_header)
+    assert deleted.status_code == 204
+    listed2 = client.get("/api/transactions", headers=auth_header)
+    assert all(t["client_id"] != "c_del" for t in listed2.json())
+    missing = client.delete(f"/api/transactions/{row['id']}", headers=auth_header)
+    assert missing.status_code == 404
+

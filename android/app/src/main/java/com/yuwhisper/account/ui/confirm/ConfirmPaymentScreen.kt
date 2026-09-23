@@ -1,6 +1,7 @@
 package com.yuwhisper.account.ui.confirm
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -75,7 +76,12 @@ fun ConfirmPaymentScreen(
     ) -> Unit,
     onDismissKeepPending: () -> Unit,
 ) {
-    BackHandler(onBack = onDismissKeepPending)
+    // Overlay ComposeView has no ComponentActivity; skip BackHandler unless a dispatcher exists.
+    val backDispatcherOwner = LocalOnBackPressedDispatcherOwner.current
+    if (backDispatcherOwner != null) {
+        BackHandler(onBack = onDismissKeepPending)
+    }
+    // Overlay hosts pass animateIn=false so the card is visible even if effects do not run.
     var visible by remember { mutableStateOf(!animateIn) }
     LaunchedEffect(Unit) { visible = true }
 

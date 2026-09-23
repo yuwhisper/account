@@ -40,6 +40,7 @@ class CloudSync(
             seedIfEmpty(database)
             val api = apiClient.syncApi()
             pushCategoryDeletions(api)
+            pushTransactionDeletions(api)
             pullAndMergeCategories(api)
             pushLocalCategories(api)
             pushPendingTransactions(api)
@@ -97,6 +98,27 @@ class CloudSync(
                 syncMetaDao.delete(tombstone.key)
             } catch (e: HttpException) {
                 // Already deleted remotely is a successful idempotent outcome.
+                if (e.code() == 404) {
+                    syncMetaDao.delete(tombstone.key)
+                } else {
+                    throw e
+                }
+            }
+        }
+    }
+
+    private suspend fun pushTransactionDeletions(api: SyncApi) {
+        val tombstones = syncMetaDao.getByPrefix(LedgerRepository.TRANSACTION_DELETE_SERVER_PREFIX)
+        for (tombstone in tombstones) {
+            val serverId = tombstone.value.toLongOrNull()
+            if (serverId == null) {
+                syncMetaDao.delete(tombstone.key)
+                continue
+            }
+            try {
+                api.deleteTransaction(serverId)
+                syncMetaDao.delete(tombstone.key)
+            } catch (e: HttpException) {
                 if (e.code() == 404) {
                     syncMetaDao.delete(tombstone.key)
                 } else {
@@ -203,6 +225,10 @@ class CloudSync(
 
         for (dto in pull.transactions) {
             val remoteUpdated = SyncTime.parse(dto.updated_at)
+            val deleted = syncMetaDao.get(
+                LedgerRepository.TRANSACTION_DELETE_CLIENT_PREFIX + dto.client_id,
+            )
+            if (deleted != null) continue
             val categoryLocalId = dto.category_id?.let { categoriesByServerId[it]?.localId }
             val existing = transactionDao.findByClientId(dto.client_id)
             if (existing == null) {

@@ -1,7 +1,6 @@
 package com.yuwhisper.account.capture
 
 import android.app.Notification
-import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -35,7 +34,7 @@ class PaymentNotificationListener : NotificationListenerService() {
         if (!AutoBookkeepingPrefs.isMasterEnabled(this)) return
         val packageName = sbn.packageName ?: return
         if (packageName == applicationContext.packageName) return
-        if ((sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
+        // Group summaries are parsed too: later WeChat/Alipay pays often only refresh the group item.
 
         val app = applicationContext as? AccountApp ?: return
         val listener = this
@@ -74,7 +73,7 @@ class PaymentNotificationListener : NotificationListenerService() {
                         source = source,
                         amountCents = parsed?.amountCents,
                         merchant = merchant,
-                        occurredAt = Instant.ofEpochMilli(sbn.postTime),
+                        occurredAt = Instant.now(),
                     ),
                     captureChannel = CHANNEL,
                     rawText = rawBlob,

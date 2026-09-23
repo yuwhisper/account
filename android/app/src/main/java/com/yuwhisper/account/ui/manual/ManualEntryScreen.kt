@@ -2,7 +2,6 @@ package com.yuwhisper.account.ui.manual
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,7 +17,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -66,7 +64,6 @@ fun ManualEntryScreen(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var amountText by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(LedgerRepository.TYPE_EXPENSE) }
     var categoryExpanded by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<CategoryEntity?>(null) }
     var merchant by remember { mutableStateOf("") }
@@ -111,18 +108,11 @@ fun ManualEntryScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = type == LedgerRepository.TYPE_EXPENSE,
-                    onClick = { type = LedgerRepository.TYPE_EXPENSE },
-                    label = { Text("\u652f\u51fa") },
-                )
-                FilterChip(
-                    selected = type == LedgerRepository.TYPE_INCOME,
-                    onClick = { type = LedgerRepository.TYPE_INCOME },
-                    label = { Text("\u6536\u5165") },
-                )
-            }
+            Text(
+                "只记支出",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
 
             ExposedDropdownMenuBox(
                 expanded = categoryExpanded,
@@ -207,7 +197,7 @@ fun ManualEntryScreen(
                     saving = true
                     onSave(
                         cents,
-                        type,
+                        LedgerRepository.TYPE_EXPENSE,
                         selectedCategory?.localId,
                         merchant,
                         note,

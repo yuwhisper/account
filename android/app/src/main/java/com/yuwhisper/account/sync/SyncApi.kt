@@ -31,6 +31,9 @@ interface SyncApi {
     @DELETE("/api/categories/{id}")
     suspend fun deleteCategory(@Path("id") id: Long)
 
+    @DELETE("/api/transactions/{id}")
+    suspend fun deleteTransaction(@Path("id") id: Long)
+
     @POST("/api/transactions/sync/push")
     suspend fun pushTransactions(@Body body: TransactionPushRequest): PushOkResponse
 

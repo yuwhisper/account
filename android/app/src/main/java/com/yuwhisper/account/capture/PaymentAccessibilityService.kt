@@ -89,8 +89,21 @@ class PaymentAccessibilityService : AccessibilityService() {
         return host.show(pendingId)
     }
 
+    /** Snapshot of the current window texts, for Settings → 复制诊断信息. */
+    fun dumpForegroundTexts(): String {
+        val root = rootInActiveWindow
+        val pkg = root?.packageName?.toString().orEmpty()
+        val texts = ArrayList<String>(96)
+        collectTexts(root, texts, depth = 0)
+        return buildString {
+            append("pkg=").append(pkg).append(" nodes=").append(texts.size).append('\n')
+            append(texts.take(80).joinToString(" | "))
+        }.take(1500)
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        if (confirmOverlay?.isShowing() == true) return
         val type = event.eventType
         if (type != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             type != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
@@ -139,12 +152,28 @@ class PaymentAccessibilityService : AccessibilityService() {
     }
 
     private fun scanPackage(packageName: String, pass: Int) {
-        val root = rootInActiveWindow ?: return
-        val rootPkg = root.packageName?.toString() ?: packageName
-        if (rootPkg == applicationContext.packageName) return
-        // Event may be WeChat while a system dialog is briefly active — only scan matching pkg.
-        if (rootPkg != packageName) return
-        scanRoot(rootPkg, root, pass)
+        if (confirmOverlay?.isShowing() == true) return
+        val root = findScanRoot(packageName) ?: return
+        scanRoot(packageName, root, pass)
+    }
+
+    /**
+     * Prefer the payment app's window. After a leftover overlay, [rootInActiveWindow]
+     * is this app and would skip every later pay if we only scanned the active root.
+     */
+    private fun findScanRoot(packageName: String): AccessibilityNodeInfo? {
+        val active = rootInActiveWindow
+        val activePkg = active?.packageName?.toString()
+        if (activePkg == packageName) return active
+        val listed = windows
+        if (listed != null) {
+            for (window in listed) {
+                val root = window.root ?: continue
+                if (root.packageName?.toString() == packageName) return root
+            }
+        }
+        if (activePkg == applicationContext.packageName) return null
+        return null
     }
 
     private fun scanRoot(packageName: String, root: AccessibilityNodeInfo, pass: Int) {
@@ -154,16 +183,19 @@ class PaymentAccessibilityService : AccessibilityService() {
 
         // Chat history often contains old 红包/转账 text. Only skip when it looks like a
         // normal chat AND there is no dedicated success banner on screen.
-        if (looksLikeWeChatChatShell(texts) && !hasDedicatedSuccessBanner(texts)) {
-            CaptureDebug.note("跳过聊天页 pkg=$packageName nodes=${texts.size}")
+        if (PaymentParser.looksLikeWeChatChatShell(texts) &&
+            !PaymentParser.hasDedicatedSuccessBanner(texts)
+        ) {
+            CaptureDebug.note("跳过聊天页 pkg=$packageName nodes=${texts.size}", sample = texts.take(24).joinToString(" "))
             return
         }
 
         val spaced = texts.joinToString(" ")
-        if (!PaymentParser.shouldOfferConfirm(packageName, "", spaced, accessibilityMode = true)) {
+        if (!PaymentParser.shouldOfferConfirmFromNodes(packageName, texts)) {
             if (pass == 0 || pass == 3) {
                 CaptureDebug.note(
-                    "未达成功条件 pass=$pass pkg=$packageName sample=${spaced.take(120)}",
+                    "未达成功条件 pass=$pass pkg=$packageName sample=${spaced.take(160)}",
+                    sample = spaced.take(1200),
                 )
             }
             return
@@ -203,7 +235,10 @@ class PaymentAccessibilityService : AccessibilityService() {
                     return@runCatching
                 }
 
-                CaptureDebug.note("捕获成功 pass=$pass amount=$amountCents merchant=$merchant")
+                CaptureDebug.note(
+                    "捕获成功 pass=$pass amount=$amountCents merchant=$merchant",
+                    sample = spaced.take(1200),
+                )
                 ConfirmDispatcher.onPaymentDetected(
                     context = service,
                     candidate = Candidate(
@@ -219,31 +254,6 @@ class PaymentAccessibilityService : AccessibilityService() {
                 Log.e(TAG, "scanRoot failed", t)
                 CaptureDebug.note("捕获异常: ${t.message}")
             }
-        }
-    }
-
-    private fun looksLikeWeChatChatShell(texts: List<String>): Boolean {
-        // Only treat as chat when the voice/keyboard input bar is clearly present.
-        return texts.any {
-            it == "按住 说话" || it == "按住说话" ||
-                it.contains("切换到键盘") || it.contains("切换到语音")
-        }
-    }
-
-    /** Phrases that appear on result pages, not as ordinary chat bubbles. */
-    private fun hasDedicatedSuccessBanner(texts: List<String>): Boolean {
-        return texts.any { t ->
-            t.contains("支付成功") ||
-                t.contains("付款成功") ||
-                t.contains("转账成功") ||
-                t.contains("待朋友确认收款") ||
-                t.contains("待确认收款") ||
-                t.contains("看看大家的手气") ||
-                t.contains("红包发送成功") ||
-                t.contains("你发了一个红包") ||
-                t.contains("你发了一个拼手气红包") ||
-                t.contains("红包已发送") ||
-                t == "已发送"
         }
     }
 

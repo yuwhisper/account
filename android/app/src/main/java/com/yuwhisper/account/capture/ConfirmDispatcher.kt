@@ -112,6 +112,7 @@ object ConfirmDispatcher {
             merchant = candidate.merchant,
             source = candidate.source,
         )
+        CaptureDebug.note("已发待入账通知 pendingId=$pendingId")
 
         // 1) Accessibility overlay — stays over WeChat, no SYSTEM_ALERT_WINDOW needed.
         val a11yService = PaymentAccessibilityService.instance

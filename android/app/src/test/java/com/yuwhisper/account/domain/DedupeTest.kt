@@ -43,19 +43,27 @@ class DedupeTest {
     }
 
     @Test
-    fun notDuplicateDifferentAmount() {
-        val a = Candidate(
+    fun notDuplicateWhenSameAmountMuchLater() {
+        val first = Candidate(
             source = "wechat",
-            amountCents = 3650,
-            merchant = "瑞幸",
+            amountCents = 100,
+            merchant = "未知商户",
             occurredAt = Instant.parse("2026-08-12T02:00:00Z"),
         )
-        val b = Candidate(
+        val later = Candidate(
             source = "wechat",
-            amountCents = 3651,
-            merchant = "瑞幸",
-            occurredAt = Instant.parse("2026-08-12T02:00:20Z"),
+            amountCents = 100,
+            merchant = "未知商户",
+            occurredAt = Instant.parse("2026-08-12T02:10:00Z"),
         )
-        assertFalse(Dedupe.isDuplicate(b, listOf(a), windowSeconds = 120))
+        assertFalse(Dedupe.isDuplicate(later, listOf(first), windowSeconds = 8))
+    }
+
+    @Test
+    fun duplicateWhenNotificationReusesSameTimestamp() {
+        val t = Instant.parse("2026-08-12T02:00:00Z")
+        val first = Candidate("wechat", 100, "未知商户", t)
+        val update = Candidate("wechat", 100, "未知商户", t)
+        assertTrue(Dedupe.isDuplicate(update, listOf(first), windowSeconds = 8))
     }
 }

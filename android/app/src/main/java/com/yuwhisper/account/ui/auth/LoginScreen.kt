@@ -150,7 +150,7 @@ fun LoginScreen(
                 label = { Text("服务器地址") },
                 supportingText = {
                     Text(
-                        "模拟器默认 ${SyncPrefs.DEFAULT_BASE_URL}；真机请填电脑局域网 IP，如 http://192.168.1.8:8000",
+                        "默认 ${SyncPrefs.DEFAULT_BASE_URL}。本地调试可填 http://10.0.2.2:8000",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 },

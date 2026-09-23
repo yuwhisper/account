@@ -149,6 +149,32 @@ class LedgerRepository(
         notifyPendingSync()
     }
 
+    suspend fun deleteTransaction(localId: Long) {
+        ensureSeeded()
+        database.withTransaction {
+            val tx = transactionDao.getAll().firstOrNull { it.localId == localId }
+                ?: return@withTransaction
+            tx.serverId?.let { serverId ->
+                database.syncMetaDao().upsert(
+                    SyncMetaEntity(
+                        key = "$TRANSACTION_DELETE_SERVER_PREFIX$serverId",
+                        value = serverId.toString(),
+                        updatedAt = Instant.now(),
+                    ),
+                )
+            }
+            database.syncMetaDao().upsert(
+                SyncMetaEntity(
+                    key = "$TRANSACTION_DELETE_CLIENT_PREFIX${tx.clientId}",
+                    value = tx.clientId,
+                    updatedAt = Instant.now(),
+                ),
+            )
+            transactionDao.deleteByLocalId(localId)
+        }
+        notifyPendingSync()
+    }
+
     /**
      * Wipe cloud-linked local rows when switching accounts so user B never sees user A's ledger
      * or reuses A's server category IDs / sync cursor.
@@ -282,6 +308,8 @@ class LedgerRepository(
 
     companion object {
         const val CATEGORY_DELETE_PREFIX = "category_delete:"
+        const val TRANSACTION_DELETE_SERVER_PREFIX = "tx_delete_server:"
+        const val TRANSACTION_DELETE_CLIENT_PREFIX = "tx_delete_client:"
         const val TYPE_EXPENSE = "expense"
         const val TYPE_INCOME = "income"
         const val SOURCE_MANUAL = "manual"

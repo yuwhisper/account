@@ -50,6 +50,10 @@ class Transaction(Base):
     # Avoid Mapped[Optional[...]] — SQLAlchemy 2.0.36 + Python 3.14 Union bug
     category_id = mapped_column(ForeignKey("categories.id"), nullable=True)
     note = mapped_column(String(512), nullable=False, default="")
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
     type: Mapped[str] = mapped_column(String(16), nullable=False)  # expense | income

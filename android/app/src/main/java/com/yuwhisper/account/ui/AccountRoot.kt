@@ -147,6 +147,9 @@ fun AccountRoot(repository: LedgerRepository) {
                 LedgerScreen(
                     days = days,
                     onAddClick = { navController.navigate(Routes.MANUAL) },
+                    onDeleteItem = { item ->
+                        vm.deleteTransaction(item.localId) { }
+                    },
                 )
             }
             composable(Routes.STATS) {

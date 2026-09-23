@@ -17,10 +17,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -52,9 +56,32 @@ import androidx.compose.foundation.layout.Spacer as LayoutSpacer
 fun LedgerScreen(
     days: List<LedgerDayGroup>,
     onAddClick: () -> Unit,
+    onDeleteItem: (LedgerItemUi) -> Unit,
 ) {
     var entered by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<LedgerItemUi?>(null) }
     LaunchedEffect(Unit) { entered = true }
+
+    pendingDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("删除这笔流水？") },
+            text = {
+                Text("${item.merchant}  ¥${item.amountCents.centsToYuanText()}")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteItem(item)
+                        pendingDelete = null
+                    },
+                ) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
+            },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -114,7 +141,7 @@ fun LedgerScreen(
                         visible = entered,
                         enter = fadeIn() + slideInVertically { it / 10 },
                     ) {
-                        DaySection(day)
+                        DaySection(day, onDeleteItem = { pendingDelete = it })
                     }
                 }
                 item { LayoutSpacer(Modifier.height(72.dp)) }
@@ -124,7 +151,10 @@ fun LedgerScreen(
 }
 
 @Composable
-private fun DaySection(day: LedgerDayGroup) {
+private fun DaySection(
+    day: LedgerDayGroup,
+    onDeleteItem: (LedgerItemUi) -> Unit,
+) {
     val dateLabel = day.date.format(DateTimeFormatter.ofPattern("M\u6708d\u65e5 EEEE"))
     Surface(
         Modifier.fillMaxWidth(),
@@ -161,14 +191,17 @@ private fun DaySection(day: LedgerDayGroup) {
                             .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
                     )
                 }
-                TransactionRow(item)
+                TransactionRow(item, onDelete = { onDeleteItem(item) })
             }
         }
     }
 }
 
 @Composable
-private fun TransactionRow(item: LedgerItemUi) {
+private fun TransactionRow(
+    item: LedgerItemUi,
+    onDelete: () -> Unit,
+) {
     val isExpense = item.type == LedgerRepository.TYPE_EXPENSE
     val amountColor = if (isExpense) AccountExpenseColor else AccountIncomeColor
     val sign = if (isExpense) "-" else "+"
@@ -199,5 +232,12 @@ private fun TransactionRow(item: LedgerItemUi) {
             color = amountColor,
             fontWeight = FontWeight.SemiBold,
         )
+        IconButton(onClick = onDelete) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = "删除",
+                tint = AccountMutedColor,
+            )
+        }
     }
 }

@@ -12,6 +12,8 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -21,12 +23,9 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.yuwhisper.account.AccountApp
 import com.yuwhisper.account.data.local.entity.CategoryEntity
 import com.yuwhisper.account.data.local.entity.PendingPaymentEntity
@@ -42,17 +41,19 @@ import kotlinx.coroutines.launch
 /**
  * Floating confirm dialog via SYSTEM_ALERT_WINDOW — stays over WeChat/Alipay without opening the app UI.
  */
-class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner, OnBackPressedDispatcherOwner {
 
     private val lifecycleRegistry = LifecycleRegistry(this)
     private val store = ViewModelStore()
     private val savedStateController = SavedStateRegistryController.create(this)
+    private val backDispatcher = OnBackPressedDispatcher()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val viewModelStore: ViewModelStore get() = store
     override val savedStateRegistry: SavedStateRegistry get() = savedStateController.savedStateRegistry
+    override val onBackPressedDispatcher: OnBackPressedDispatcher get() = backDispatcher
 
     private var windowManager: WindowManager? = null
     private var composeView: ComposeView? = null
@@ -102,16 +103,19 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         windowManager = wm
         val view = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@ConfirmOverlayService)
-            setViewTreeViewModelStoreOwner(this@ConfirmOverlayService)
-            setViewTreeSavedStateRegistryOwner(this@ConfirmOverlayService)
+            installOverlayViewTrees(
+                lifecycleOwner = this@ConfirmOverlayService,
+                viewModelStoreOwner = this@ConfirmOverlayService,
+                savedStateRegistryOwner = this@ConfirmOverlayService,
+                backDispatcherOwner = this@ConfirmOverlayService,
+            )
             setContent {
                 AccountTheme {
                     ConfirmPaymentScreen(
                         pending = pending,
                         categories = categories,
                         loadError = loadError,
-                        animateIn = true,
+                        animateIn = false,
                         onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
                             val app = application as AccountApp
                             serviceScope.launch {
@@ -151,15 +155,18 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
             WindowManager.LayoutParams.MATCH_PARENT,
             type,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
+                WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or
+                WindowManager.LayoutParams.FLAG_DIM_BEHIND,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.CENTER
+            dimAmount = 0.45f
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
             title = "惜夏记确认"
         }
         return runCatching {
             wm.addView(view, params)
+            view.requestFocus()
             true
         }.getOrElse {
             Log.e(TAG, "add overlay failed", it)

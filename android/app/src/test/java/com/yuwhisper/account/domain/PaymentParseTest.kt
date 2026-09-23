@@ -139,4 +139,72 @@ class PaymentParseTest {
             ),
         )
     }
+
+    @Test
+    fun alipayHomeDoesNotOfferConfirm() {
+        val home = listOf(
+            "首页", "理财", "消息", "我的",
+            "余额", "花呗", "转账", "出行",
+            "扣款", "¥12.00", "消费",
+        )
+        assertTrue(
+            !PaymentParser.shouldOfferConfirmFromNodes(
+                "com.eg.android.AlipayGphone",
+                home,
+            ),
+        )
+        assertTrue(
+            PaymentParser.shouldOfferConfirmFromNodes(
+                "com.eg.android.AlipayGphone",
+                listOf("支付成功", "¥28.00", "星巴克", "完成"),
+            ),
+        )
+    }
+
+    @Test
+    fun incomePageDoesNotOfferConfirm() {
+        assertTrue(
+            !PaymentParser.shouldOfferConfirmFromNodes(
+                "com.tencent.mm",
+                listOf("已存入零钱", "¥5.00", "红包"),
+            ),
+        )
+        assertTrue(
+            !PaymentParser.shouldOfferConfirm(
+                "com.tencent.mm",
+                "微信支付",
+                "收款成功 ¥5.00",
+                accessibilityMode = true,
+            ),
+        )
+    }
+
+    @Test
+    fun wechatRedPacketSendResultPageOffersConfirm() {
+        val result = listOf("已发送", "红包", "¥", "0.3", "未领取的红包将于24小时后发起退款", "完成")
+        assertTrue(PaymentParser.shouldOfferConfirmFromNodes("com.tencent.mm", result))
+        val parsed = PaymentParser.parseAccessibility("com.tencent.mm", result)
+        assertNotNull(parsed)
+        assertEquals(30, parsed!!.amountCents)
+    }
+
+    @Test
+    fun alipayNotificationRequiresSuccessCopy() {
+        assertTrue(
+            !PaymentParser.shouldOfferConfirm(
+                "com.eg.android.AlipayGphone",
+                "支付宝",
+                "账户扣款 ¥12.00",
+                accessibilityMode = false,
+            ),
+        )
+        assertTrue(
+            PaymentParser.shouldOfferConfirm(
+                "com.eg.android.AlipayGphone",
+                "支付宝",
+                "付款成功 商户：星巴克 金额：¥28.00",
+                accessibilityMode = false,
+            ),
+        )
+    }
 }

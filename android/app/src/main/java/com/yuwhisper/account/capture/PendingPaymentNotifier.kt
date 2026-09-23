@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.yuwhisper.account.ui.confirm.ConfirmPaymentActivity
@@ -96,12 +97,22 @@ object PendingPaymentNotifier {
             )
             .setAutoCancel(false)
             .setOngoing(false)
+            .setOnlyAlertOnce(false)
             .setContentIntent(pendingIntent)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
         // Never setFullScreenIntent — it launches ConfirmPaymentActivity and leaves WeChat.
         val notification = builder.build()
+        val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) {
+            Log.w(TAG, "notifications disabled; skip pendingId=$pendingId")
+            CaptureDebug.note("待入账通知被系统关闭 pendingId=$pendingId")
+            return
+        }
         runCatching {
-            NotificationManagerCompat.from(context).notify(notificationId(pendingId), notification)
+            nm.notify(notificationId(pendingId), notification)
+        }.onFailure {
+            Log.w(TAG, "notify pending failed pendingId=$pendingId", it)
+            CaptureDebug.note("待入账通知发送失败: ${it.message}")
         }
     }
 
@@ -125,4 +136,5 @@ object PendingPaymentNotifier {
     }
 
     private const val PENDING_NOTIF_BASE = 71_000
+    private const val TAG = "PendingNotifier"
 }

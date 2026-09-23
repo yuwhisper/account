@@ -131,6 +131,13 @@ class LedgerViewModel(
         }
     }
 
+    fun deleteTransaction(localId: Long, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            runCatching { repository.deleteTransaction(localId) }
+                .onFailure { onError(it.message ?: "\u5220\u9664\u5931\u8d25") }
+        }
+    }
+
     fun exportCsv(file: File, onDone: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             runCatching { repository.exportCsv(file) }

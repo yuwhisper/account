@@ -1,5 +1,8 @@
 package com.yuwhisper.account.ui.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -42,6 +45,7 @@ import com.yuwhisper.account.capture.AutoBookkeepingStatusService
 import com.yuwhisper.account.capture.AutoLedgerPermissions
 import com.yuwhisper.account.capture.CaptureDebug
 import com.yuwhisper.account.capture.ConfirmDispatcher
+import com.yuwhisper.account.capture.PaymentAccessibilityService
 import com.yuwhisper.account.capture.PermissionStep
 import com.yuwhisper.account.domain.Candidate
 import com.yuwhisper.account.sync.AuthRepository
@@ -129,7 +133,7 @@ fun SettingsScreen(
             context = context,
             candidate = Candidate(
                 source = "wechat",
-                amountCents = 3650,
+                amountCents = 100 + (System.currentTimeMillis() % 9_900).toInt(),
                 merchant = "瑞幸咖啡",
                 occurredAt = Instant.now(),
             ),
@@ -230,6 +234,25 @@ fun SettingsScreen(
                 color = AccountMutedColor,
                 style = MaterialTheme.typography.bodySmall,
             )
+            OutlinedButton(
+                onClick = {
+                    val dump = PaymentAccessibilityService.instance?.dumpForegroundTexts()
+                    val report = buildString {
+                        append(CaptureDebug.report())
+                        if (!dump.isNullOrBlank()) {
+                            append("\n当前画面：")
+                            append(dump)
+                        }
+                    }
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("惜夏记诊断", report))
+                    captureDebug = CaptureDebug.lastNote
+                    scope.launch { snackbar.showSnackbar("已复制诊断信息，发给开发者即可") }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("复制诊断信息")
+            }
             PermissionStatusList(steps = permissionSteps)
             Button(
                 onClick = onOpenPermissionOnboarding,
