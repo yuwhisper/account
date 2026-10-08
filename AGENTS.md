@@ -1,4 +1,4 @@
-# 语声记账
+# 惜夏记
 
 Android（Kotlin / Compose）客户端 + FastAPI 后端。付款通知与无障碍双通道捕获，用户确认后入账。本地 Room 是账本，登录后才云同步。
 

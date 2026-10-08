@@ -260,7 +260,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "语声记账";
+				INFOPLIST_KEY_CFBundleDisplayName = "惜夏记";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "从相册选择付款截图，识别金额后待确认入账。";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -290,7 +290,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "语声记账";
+				INFOPLIST_KEY_CFBundleDisplayName = "惜夏记";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "从相册选择付款截图，识别金额后待确认入账。";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;

@@ -21,7 +21,7 @@ struct SettingsScreen: View {
                         step("4", "关闭「运行前询问」，并允许打开 App。确认分类后再入账。")
                     }
                     .font(.subheadline)
-                    Text("也可以在流水页从相册识别，或在微信里把付款截图分享到「语声记账」。")
+                    Text("也可以在流水页从相册识别，或在微信里把付款截图分享到「惜夏记」。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
