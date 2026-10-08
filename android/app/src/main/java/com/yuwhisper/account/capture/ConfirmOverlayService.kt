@@ -117,20 +117,20 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
                         loadError = loadError,
                         animateIn = false,
                         onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
+                            val confirmingId = pendingId
                             val app = application as AccountApp
                             serviceScope.launch {
                                 runCatching {
                                     app.ledgerRepository.confirmPendingPayment(
-                                        pendingLocalId = pendingId,
+                                        pendingLocalId = confirmingId,
                                         amountCents = amountCents,
                                         merchant = merchant,
                                         categoryLocalId = categoryLocalId,
                                         note = note,
                                     )
-                                    PendingPaymentNotifier.cancel(this@ConfirmOverlayService, pendingId)
+                                    PendingPaymentNotifier.cancel(this@ConfirmOverlayService, confirmingId)
                                 }.onSuccess {
                                     onDone()
-                                    mainHandler.post { dismissOverlay() }
                                 }.onFailure { e ->
                                     Log.e(TAG, "confirm failed", e)
                                     onError(e.message ?: "确认失败")
@@ -210,6 +210,8 @@ class ConfirmOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         if (view != null) {
             runCatching { windowManager?.removeView(view) }
         }
+        pending = null
+        loadError = null
     }
 
     override fun onDestroy() {

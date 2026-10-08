@@ -1,8 +1,13 @@
 package com.yuwhisper.account.ui
 
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -83,7 +89,14 @@ fun AccountRoot(repository: LedgerRepository) {
     )
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    val showBottomBar = currentRoute in tabs.map { it.route }
+    val tabRoutes = tabs.map { it.route }
+    val showBottomBar = currentRoute in tabRoutes
+    // Compose applies the system animator duration scale, including disabled animations.
+    val navigationMotion = spring<IntOffset>(
+        dampingRatio = 1f,
+        stiffness = 700f,
+        visibilityThreshold = IntOffset.VisibilityThreshold,
+    )
 
     fun openPermissionOnboarding() {
         navController.navigate(Routes.PERMISSION_ONBOARDING) {
@@ -101,12 +114,13 @@ fun AccountRoot(repository: LedgerRepository) {
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 2.dp,
-                    modifier = Modifier.clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)),
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
                 ) {
                     tabs.forEach { tab ->
                         NavigationBarItem(
@@ -120,7 +134,7 @@ fun AccountRoot(repository: LedgerRepository) {
                                     restoreState = true
                                 }
                             },
-                            icon = { Icon(tab.icon, contentDescription = tab.label) },
+                            icon = { Icon(tab.icon, contentDescription = null) },
                             label = { Text(tab.label) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -137,11 +151,35 @@ fun AccountRoot(repository: LedgerRepository) {
         NavHost(
             navController = navController,
             startDestination = Routes.LEDGER,
-            modifier = Modifier.padding(padding),
-            enterTransition = { fadeIn(tween(220)) },
-            exitTransition = { fadeOut(tween(160)) },
-            popEnterTransition = { fadeIn(tween(220)) },
-            popExitTransition = { fadeOut(tween(160)) },
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding),
+            enterTransition = {
+                if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
+                    EnterTransition.None
+                } else {
+                    slideInHorizontally(navigationMotion) { it }
+                }
+            },
+            exitTransition = {
+                if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
+                    ExitTransition.None
+                } else {
+                    slideOutHorizontally(navigationMotion) { -it / 4 }
+                }
+            },
+            popEnterTransition = {
+                if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
+                    EnterTransition.None
+                } else {
+                    slideInHorizontally(navigationMotion) { -it / 4 }
+                }
+            },
+            popExitTransition = {
+                if (initialState.destination.route in tabRoutes && targetState.destination.route in tabRoutes) {
+                    ExitTransition.None
+                } else {
+                    slideOutHorizontally(navigationMotion) { it }
+                }
+            },
         ) {
             composable(Routes.LEDGER) {
                 LedgerScreen(

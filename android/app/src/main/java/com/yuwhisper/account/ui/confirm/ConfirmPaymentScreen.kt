@@ -1,18 +1,25 @@
 package com.yuwhisper.account.ui.confirm
 
+import com.yuwhisper.account.ui.theme.AccountSerif
+
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,15 +27,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -43,21 +52,26 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.yuwhisper.account.ui.theme.AccountFieldShape
+import com.yuwhisper.account.ui.theme.AccountPageHeading
 import com.yuwhisper.account.data.local.entity.CategoryEntity
 import com.yuwhisper.account.data.local.entity.PendingPaymentEntity
-import kotlinx.coroutines.launch
 import java.util.Locale
 
 @Composable
@@ -76,68 +90,149 @@ fun ConfirmPaymentScreen(
     ) -> Unit,
     onDismissKeepPending: () -> Unit,
 ) {
-    // Overlay ComposeView has no ComponentActivity; skip BackHandler unless a dispatcher exists.
-    val backDispatcherOwner = LocalOnBackPressedDispatcherOwner.current
-    if (backDispatcherOwner != null) {
-        BackHandler(onBack = onDismissKeepPending)
+    // Overlay hosts start visible, even when their first composition cannot launch effects.
+    val visibility = remember { MutableTransitionState(!animateIn) }
+    var saving by remember { mutableStateOf(false) }
+    var closing by remember { mutableStateOf(false) }
+    var dismissalDelivered by remember { mutableStateOf(false) }
+    val dismissAfterExit by rememberUpdatedState(onDismissKeepPending)
+    val requestDismiss = {
+        if (!saving && !closing) {
+            closing = true
+            visibility.targetState = false
+        }
     }
-    // Overlay hosts pass animateIn=false so the card is visible even if effects do not run.
-    var visible by remember { mutableStateOf(!animateIn) }
-    LaunchedEffect(Unit) { visible = true }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0x66F7D6E0), Color(0x99E8A0B5)),
-                ),
-            )
-            .clickable(onClick = onDismissKeepPending),
-        contentAlignment = Alignment.Center,
+    LaunchedEffect(Unit) {
+        if (!closing) visibility.targetState = true
+    }
+    // Removing a service window or finishing the Activity happens only after the exit settles.
+    // Compose's system duration scale also makes this settle immediately when motion is disabled.
+    LaunchedEffect(visibility.isIdle, visibility.currentState, closing) {
+        if (closing && visibility.isIdle && !visibility.currentState && !dismissalDelivered) {
+            dismissalDelivered = true
+            dismissAfterExit()
+        }
+    }
+
+    // Overlay ComposeView may have no Activity dispatcher; keep that host safe as well.
+    if (LocalOnBackPressedDispatcherOwner.current != null) {
+        BackHandler { requestDismiss() }
+    }
+
+    AnimatedVisibility(
+        visibleState = visibility,
+        modifier = Modifier.fillMaxSize(),
+        enter = fadeIn(tween(180)),
+        exit = fadeOut(tween(140)),
     ) {
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(180)) + scaleIn(
-                initialScale = 0.92f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow,
-                ),
-            ) + slideInVertically { it / 12 },
-            exit = fadeOut(tween(120)),
-        ) {
-            when {
-                loadError != null -> {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(28.dp)
-                            .clickable(enabled = false) {},
-                        shape = RoundedCornerShape(24.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 2.dp,
-                        shadowElevation = 12.dp,
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Box(modifier = Modifier.fillMaxSize()) {
+            // The scrim is a sibling behind the card. Card padding must consume taps too.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.38f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        enabled = !saving && !closing,
+                        onClickLabel = "稍后处理",
+                        onClick = requestDismiss,
+                    ),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 20.dp, vertical = 20.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                val cardModifier = Modifier
+                    .widthIn(max = 480.dp)
+                    .fillMaxWidth()
+                    .animateEnterExit(
+                        enter = scaleIn(initialScale = 0.98f, animationSpec = spring(dampingRatio = 0.9f, stiffness = 600f)) +
+                            slideInVertically(spring(dampingRatio = 0.9f, stiffness = 600f)) { it / 24 },
+                        exit = scaleOut(targetScale = 0.98f, animationSpec = tween(140)) +
+                            slideOutVertically(tween(140)) { it / 24 },
+                    )
+                    .pointerInput(Unit) { detectTapGestures(onTap = {}) }
+
+                when {
+                    loadError != null -> {
+                        Surface(
+                            modifier = cardModifier,
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 4.dp,
                         ) {
-                            Text(loadError, style = MaterialTheme.typography.bodyLarge)
-                            TextButton(onClick = onDismissKeepPending) { Text("稍后处理") }
+                            Column(
+                                modifier = Modifier.verticalScroll(rememberScrollState()).padding(24.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text("暂时无法打开", style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    loadError,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                TextButton(onClick = requestDismiss, enabled = !closing) {
+                                    Text("稍后处理")
+                                }
+                            }
                         }
                     }
-                }
-                pending == null -> {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-                else -> {
-                    ConfirmCard(
-                        pending = pending,
-                        categories = categories,
-                        onConfirm = onConfirm,
-                        modifier = Modifier.clickable(enabled = false) {},
-                    )
+                    pending == null -> {
+                        Surface(
+                            modifier = cardModifier,
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 4.dp,
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(28.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.dp)
+                                Text("正在读取付款信息", style = MaterialTheme.typography.titleMedium)
+                                TextButton(onClick = requestDismiss, enabled = !closing) {
+                                    Text("稍后处理")
+                                }
+                            }
+                        }
+                    }
+                    else -> {
+                        ConfirmCard(
+                            pending = pending,
+                            categories = categories,
+                            saving = saving,
+                            enabled = !saving && !closing,
+                            onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
+                                saving = true
+                                val onSaved: () -> Unit = {
+                                    saving = false
+                                    onDone()
+                                    requestDismiss()
+                                }
+                                val onSaveError: (String) -> Unit = { message ->
+                                    saving = false
+                                    onError(message)
+                                }
+                                onConfirm(
+                                    amountCents,
+                                    merchant,
+                                    categoryLocalId,
+                                    note,
+                                    onSaved,
+                                    onSaveError,
+                                )
+                            },
+                            onDismiss = requestDismiss,
+                            modifier = cardModifier,
+                        )
+                    }
                 }
             }
         }
@@ -148,6 +243,8 @@ fun ConfirmPaymentScreen(
 private fun ConfirmCard(
     pending: PendingPaymentEntity,
     categories: List<CategoryEntity>,
+    saving: Boolean,
+    enabled: Boolean,
     onConfirm: (
         amountCents: Long,
         merchant: String,
@@ -156,135 +253,124 @@ private fun ConfirmCard(
         onDone: () -> Unit,
         onError: (String) -> Unit,
     ) -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val scope = rememberCoroutineScope()
-    var amountText by remember {
+    var amountText by rememberSaveable(pending.localId) {
         mutableStateOf(
             pending.amountCents?.let { cents ->
                 String.format(Locale.US, "%.2f", cents / 100.0)
             }.orEmpty(),
         )
     }
-    var merchant by remember { mutableStateOf(pending.merchant) }
-    var note by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(categories.firstOrNull()) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
+    var merchant by rememberSaveable(pending.localId) { mutableStateOf(pending.merchant) }
+    var note by rememberSaveable(pending.localId) { mutableStateOf("") }
+    var selectedCategoryLocalId by rememberSaveable(pending.localId) {
+        mutableStateOf(categories.firstOrNull()?.localId)
+    }
+    val selectedCategory = categories.firstOrNull { it.localId == selectedCategoryLocalId }
+    var errorMessage by remember(pending.localId) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(categories) {
-        if (selectedCategory == null) selectedCategory = categories.firstOrNull()
+        if (selectedCategoryLocalId == null) selectedCategoryLocalId = categories.firstOrNull()?.localId
     }
 
+    val fieldShape = AccountFieldShape
+    val haptic = LocalHapticFeedback.current
     val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
-        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
         focusedContainerColor = MaterialTheme.colorScheme.surface,
         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+        disabledContainerColor = MaterialTheme.colorScheme.surface,
     )
 
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 22.dp),
-        shape = RoundedCornerShape(28.dp),
+        modifier = modifier,
+        shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        shadowElevation = 10.dp,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 4.dp,
     ) {
         Column(
             modifier = Modifier
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-                            MaterialTheme.colorScheme.surface,
-                        ),
-                    ),
-                )
-                .padding(horizontal = 22.dp, vertical = 26.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-            ) {
+            AccountPageHeading(title = "确认入账", subtitle = sourceLabel(pending.source))
+            if (pending.amountCents == null) {
                 Text(
-                    text = sourceLabel(pending.source),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    fontWeight = FontWeight.Medium,
+                    "尚未识别金额，请补充后入账。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            Text(
-                text = "确认这笔支出",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-
-            Text(
-                text = "¥",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { amountText = it.filter { c -> c.isDigit() || c == '.' } },
+                enabled = enabled,
                 singleLine = true,
-                textStyle = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.Bold,
+                label = { Text("金额 · 元") },
+                prefix = { Text("¥", style = MaterialTheme.typography.headlineSmall) },
+                placeholder = { Text("0.00") },
+                textStyle = MaterialTheme.typography.headlineLarge.copy(
+                    fontFamily = AccountSerif,
+                    fontWeight = FontWeight.Normal,
                     fontSize = 40.sp,
-                    textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurface,
                 ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 colors = fieldColors,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = fieldShape,
             )
 
             OutlinedTextField(
                 value = merchant,
                 onValueChange = { merchant = it },
+                enabled = enabled,
                 label = { Text("商户") },
                 singleLine = true,
                 colors = fieldColors,
-                shape = RoundedCornerShape(16.dp),
+                shape = fieldShape,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "消费类型",
+                    "分类",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth(),
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    categories.forEach { cat ->
-                        val selected = selectedCategory?.localId == cat.localId
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                selectedCategory = cat
-                                errorMessage = null
-                            },
-                            label = { Text(cat.name) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            ),
-                        )
+                if (categories.isEmpty()) {
+                    Text(
+                        "暂无分类，请先在账本中添加分类。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        categories.forEach { cat ->
+                            FilterChip(
+                                selected = selectedCategory?.localId == cat.localId,
+                                enabled = enabled,
+                                onClick = {
+                                    selectedCategoryLocalId = cat.localId
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    errorMessage = null
+                                },
+                                label = { Text(cat.name) },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -292,24 +378,32 @@ private fun ConfirmCard(
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
-                label = { Text("备注（可选）") },
+                enabled = enabled,
+                label = { Text("备注 · 可选") },
+                minLines = 1,
+                maxLines = 3,
                 colors = fieldColors,
-                shape = RoundedCornerShape(16.dp),
+                shape = fieldShape,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            errorMessage?.let {
-                Text(
-                    text = it,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            AnimatedVisibility(visible = errorMessage != null, enter = fadeIn(), exit = fadeOut()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+                ) {
+                    Text(
+                        errorMessage.orEmpty(),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(2.dp))
             Button(
-                enabled = !saving,
+                enabled = enabled,
                 onClick = {
                     val yuan = amountText.toDoubleOrNull()
                     if (yuan == null || !yuan.isFinite() || yuan <= 0.0 || yuan > 1_000_000.0) {
@@ -331,41 +425,39 @@ private fun ConfirmCard(
                         errorMessage = "请输入有效金额"
                         return@Button
                     }
-                    saving = true
                     errorMessage = null
                     onConfirm(
                         cents,
                         merchant,
                         cat.localId,
                         note,
-                        { saving = false },
-                        { msg ->
-                            saving = false
-                            scope.launch { errorMessage = msg }
-                        },
+                        {},
+                        { message -> errorMessage = message },
                     )
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                shape = RoundedCornerShape(12.dp),
             ) {
+                if (saving) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.size(10.dp))
+                }
                 Text(
-                    text = if (saving) "入账中…" else "确认入账",
+                    if (saving) "入账中…" else "确认入账",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
                 )
             }
-            Text(
-                text = "稍后可从「待入账」通知继续",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-            )
+            TextButton(
+                onClick = onDismiss,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("稍后处理")
+            }
         }
     }
 }

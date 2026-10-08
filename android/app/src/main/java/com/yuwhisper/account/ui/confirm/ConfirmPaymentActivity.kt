@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
@@ -28,7 +29,7 @@ class ConfirmPaymentActivity : ComponentActivity() {
     private var pending by mutableStateOf<PendingPaymentEntity?>(null)
     private var categories by mutableStateOf<List<CategoryEntity>>(emptyList())
     private var loadError by mutableStateOf<String?>(null)
-    private var pendingId: Long = -1L
+    private var pendingId by mutableStateOf(-1L)
     private var loadJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,39 +37,39 @@ class ConfirmPaymentActivity : ComponentActivity() {
         enableEdgeToEdge()
         val app = application as AccountApp
         setContent {
-            AccountTheme {
-                ConfirmPaymentScreen(
-                    pending = pending,
-                    categories = categories,
-                    loadError = loadError,
-                    animateIn = true,
-                    onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
-                        val confirmingId = pendingId
-                        lifecycleScope.launch {
-                            runCatching {
-                                app.ledgerRepository.confirmPendingPayment(
-                                    pendingLocalId = confirmingId,
-                                    amountCents = amountCents,
-                                    merchant = merchant,
-                                    categoryLocalId = categoryLocalId,
-                                    note = note,
-                                )
-                                PendingPaymentNotifier.cancel(this@ConfirmPaymentActivity, confirmingId)
-                            }.onSuccess {
-                                onDone()
-                                finish()
-                                overridePendingTransition(0, android.R.anim.fade_out)
-                            }.onFailure { e ->
-                                Log.e(TAG, "confirm failed", e)
-                                onError(e.message ?: "确认失败")
+            key(pendingId) {
+                AccountTheme {
+                    ConfirmPaymentScreen(
+                        pending = pending,
+                        categories = categories,
+                        loadError = loadError,
+                        animateIn = true,
+                        onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
+                            val confirmingId = pendingId
+                            lifecycleScope.launch {
+                                runCatching {
+                                    app.ledgerRepository.confirmPendingPayment(
+                                        pendingLocalId = confirmingId,
+                                        amountCents = amountCents,
+                                        merchant = merchant,
+                                        categoryLocalId = categoryLocalId,
+                                        note = note,
+                                    )
+                                    PendingPaymentNotifier.cancel(this@ConfirmPaymentActivity, confirmingId)
+                                }.onSuccess {
+                                    onDone()
+                                }.onFailure { e ->
+                                    Log.e(TAG, "confirm failed", e)
+                                    onError(e.message ?: "确认失败")
+                                }
                             }
-                        }
-                    },
-                    onDismissKeepPending = {
-                        finish()
-                        overridePendingTransition(0, android.R.anim.fade_out)
-                    },
-                )
+                        },
+                        onDismissKeepPending = {
+                            finish()
+                            overridePendingTransition(0, android.R.anim.fade_out)
+                        },
+                    )
+                }
             }
         }
 

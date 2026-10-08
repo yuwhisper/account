@@ -128,20 +128,20 @@ class AccessibilityConfirmOverlay(
                         loadError = loadError,
                         animateIn = false,
                         onConfirm = { amountCents, merchant, categoryLocalId, note, onDone, onError ->
+                            val confirmingId = pendingId
                             val app = service.application as AccountApp
                             scope.launch {
                                 runCatching {
                                     app.ledgerRepository.confirmPendingPayment(
-                                        pendingLocalId = pendingId,
+                                        pendingLocalId = confirmingId,
                                         amountCents = amountCents,
                                         merchant = merchant,
                                         categoryLocalId = categoryLocalId,
                                         note = note,
                                     )
-                                    PendingPaymentNotifier.cancel(service, pendingId)
+                                    PendingPaymentNotifier.cancel(service, confirmingId)
                                 }.onSuccess {
                                     onDone()
-                                    mainHandler.post { detach() }
                                 }.onFailure { e ->
                                     Log.e(TAG, "confirm failed", e)
                                     onError(e.message ?: "确认失败")

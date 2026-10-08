@@ -1,0 +1,10 @@
+{
+  "font": "YuWhisper Orchid Serif Regular",
+  "source": "https://github.com/google/fonts/tree/main/ofl/notoserifsc",
+  "license": "SIL Open Font License 1.1",
+  "weight": 400,
+  "unicodeCount": 562,
+  "sourceSHA256": "050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9",
+  "subsetBytes": 278120,
+  "purpose": "Static Chinese UI headings and seal; user input and merchant names retain system fonts."
+}

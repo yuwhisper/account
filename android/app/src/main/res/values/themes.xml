@@ -2,9 +2,9 @@
 <resources>
     <style name="Theme.YuWhisperAccount" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">#00FFFFFF</item>
-        <item name="android:navigationBarColor">#FFFFFBFC</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowBackground">#FFFFF5F8</item>
+        <item name="android:navigationBarColor">@color/account_window_background</item>
+        <item name="android:windowLightStatusBar">@bool/account_light_system_bars</item>
+        <item name="android:windowBackground">@color/account_window_background</item>
     </style>
 
     <style name="Theme.YuWhisperAccount.Confirm" parent="android:Theme.Translucent.NoTitleBar">

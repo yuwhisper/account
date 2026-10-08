@@ -18,5 +18,9 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>OrchidSerif-Regular.ttf</string>
+	</array>
 </dict>
 </plist>

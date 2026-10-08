@@ -1,243 +1,186 @@
 package com.yuwhisper.account.ui.ledger
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.yuwhisper.account.data.LedgerRepository
 import com.yuwhisper.account.ui.LedgerDayGroup
 import com.yuwhisper.account.ui.LedgerItemUi
 import com.yuwhisper.account.ui.centsToYuanText
-import com.yuwhisper.account.ui.theme.AccountExpenseColor
-import com.yuwhisper.account.ui.theme.AccountIncomeColor
-import com.yuwhisper.account.ui.theme.AccountMutedColor
+import com.yuwhisper.account.ui.theme.*
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import androidx.compose.foundation.layout.Spacer as LayoutSpacer
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LedgerScreen(
-    days: List<LedgerDayGroup>,
-    onAddClick: () -> Unit,
-    onDeleteItem: (LedgerItemUi) -> Unit,
-) {
-    var entered by remember { mutableStateOf(false) }
+fun LedgerScreen(days: List<LedgerDayGroup>, onAddClick: () -> Unit, onDeleteItem: (LedgerItemUi) -> Unit) {
     var pendingDelete by remember { mutableStateOf<LedgerItemUi?>(null) }
-    LaunchedEffect(Unit) { entered = true }
+    val currentMonth = YearMonth.now()
+    val monthDays = days.filter { YearMonth.from(it.date) == currentMonth }
+    val monthItems = monthDays.flatMap { it.items }
+    val monthExpense = monthDays.sumOf { it.expenseCents }
+    val monthIncome = monthItems.filter { it.type == LedgerRepository.TYPE_INCOME }.sumOf { it.amountCents }
 
     pendingDelete?.let { item ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text("删除这笔流水？") },
-            text = {
-                Text("${item.merchant}  ¥${item.amountCents.centsToYuanText()}")
-            },
+        AccountDialog(
+            onDismissRequest = { pendingDelete = null }, title = "删除这笔流水？",
+            description = "删除后无法撤销，请确认这笔记录。",
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDeleteItem(item)
-                        pendingDelete = null
-                    },
-                ) { Text("删除") }
+                TextButton(onClick = { onDeleteItem(item); pendingDelete = null },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                    Text("删除流水")
+                }
             },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
-            },
-        )
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("保留") } },
+        ) {
+            Text(item.merchant, style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface)
+            Text("¥${item.amountCents.centsToYuanText()}", style = MaterialTheme.typography.headlineMedium,
+                fontFamily = AccountSerif, color = MaterialTheme.colorScheme.onSurface)
+            Text(item.categoryName, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(text = "\u6d41\u6c34", fontWeight = FontWeight.SemiBold)
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddClick,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(18.dp),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "\u8bb0\u4e00\u7b14")
-            }
-        },
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
-        if (days.isEmpty()) {
-            AnimatedVisibility(
-                visible = entered,
-                enter = fadeIn() + slideInVertically { it / 8 },
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text("\u8fd8\u6ca1\u6709\u6d41\u6c34", style = MaterialTheme.typography.titleMedium)
-                    LayoutSpacer(Modifier.height(8.dp))
-                    Text(
-                        "\u70b9\u53f3\u4e0b\u89d2\u300c\u8bb0\u4e00\u7b14\u300d\uff0c\u6216\u4ed8\u6b3e\u540e\u81ea\u52a8\u5f39\u51fa\u786e\u8ba4\u5361",
-                        color = AccountMutedColor,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                itemsIndexed(days, key = { _, day -> day.date.toString() }) { _, day ->
-                    AnimatedVisibility(
-                        visible = entered,
-                        enter = fadeIn() + slideInVertically { it / 10 },
-                    ) {
-                        DaySection(day, onDeleteItem = { pendingDelete = it })
+        LazyColumn(
+            Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 32.dp),
+        ) {
+            item(key = "heading") {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        AccountPageHeading("流水", currentMonth.format(DateTimeFormatter.ofPattern("yyyy年M月")))
+                    }
+                    IconButton(onClick = onAddClick) {
+                        Icon(Icons.Default.Add, contentDescription = "记一笔", modifier = Modifier.size(22.dp))
                     }
                 }
-                item { LayoutSpacer(Modifier.height(72.dp)) }
             }
-        }
-    }
-}
-
-@Composable
-private fun DaySection(
-    day: LedgerDayGroup,
-    onDeleteItem: (LedgerItemUi) -> Unit,
-) {
-    val dateLabel = day.date.format(DateTimeFormatter.ofPattern("M\u6708d\u65e5 EEEE"))
-    Surface(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-        ),
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(dateLabel, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "\u652f\u51fa \u00a5${day.expenseCents.centsToYuanText()}",
-                    color = AccountMutedColor,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+            item(key = "summary") {
+                MonthSummary(monthExpense, monthIncome, monthItems.size)
             }
-            LayoutSpacer(Modifier.height(10.dp))
-            day.items.forEachIndexed { index, item ->
-                if (index > 0) {
-                    LayoutSpacer(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .padding(vertical = 6.dp)
-                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
-                    )
+            if (days.isEmpty()) {
+                item {
+                    Column(Modifier.fillMaxWidth().padding(vertical = 36.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("从第一笔开始", style = MaterialTheme.typography.titleLarge)
+                        Text("手动记一笔，或在付款后确认入账。", style = MaterialTheme.typography.bodyMedium, color = AccountMutedColor)
+                        OutlinedButton(onClick = onAddClick, modifier = Modifier.padding(top = 8.dp)) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("记一笔")
+                        }
+                    }
                 }
-                TransactionRow(item, onDelete = { onDeleteItem(item) })
+            } else {
+                days.forEach { day ->
+                    item(key = "day_${day.date}") { DayHeading(day) }
+                    items(day.items, key = { it.localId }) { item ->
+                        Column(Modifier.animateItem()) {
+                            TransactionRow(item, onDelete = { pendingDelete = item })
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TransactionRow(
-    item: LedgerItemUi,
-    onDelete: () -> Unit,
-) {
-    val isExpense = item.type == LedgerRepository.TYPE_EXPENSE
-    val amountColor = if (isExpense) AccountExpenseColor else AccountIncomeColor
-    val sign = if (isExpense) "-" else "+"
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                item.merchant,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                buildString {
-                    append(item.categoryName)
-                    if (item.note.isNotBlank()) append(" \u00b7 ").append(item.note)
-                },
-                color = AccountMutedColor,
-                style = MaterialTheme.typography.bodySmall,
-            )
+private fun MonthSummary(expenseCents: Long, incomeCents: Long, count: Int) {
+    Box(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 28.dp)) {
+        if (LocalDensity.current.fontScale < 1.3f) {
+            AccountOrchidArt(Modifier.width(174.dp).align(Alignment.TopEnd).offset(x = 20.dp, y = (-16).dp).alpha(0.5f))
         }
-        Text(
-            "$sign\u00a5${item.amountCents.centsToYuanText()}",
-            color = amountColor,
-            fontWeight = FontWeight.SemiBold,
-        )
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "删除",
-                tint = AccountMutedColor,
-            )
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("本月支出", style = MaterialTheme.typography.bodyMedium, color = AccountMutedColor)
+            Text("¥${expenseCents.centsToYuanText()}",
+                style = MaterialTheme.typography.displaySmall.copy(fontSize = 44.sp, lineHeight = 54.sp),
+                color = MaterialTheme.colorScheme.onBackground)
+            Row(Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("收入 ¥${incomeCents.centsToYuanText()}", style = MaterialTheme.typography.bodySmall,
+                    color = AccountMutedColor, modifier = Modifier.weight(1f))
+                Text("$count 笔", style = MaterialTheme.typography.bodySmall, color = AccountMutedColor)
+            }
+        }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+}
+
+@Composable
+private fun DayHeading(day: LedgerDayGroup) {
+    val today = LocalDate.now()
+    val dateLabel = when (day.date) {
+        today -> "今天"
+        today.minusDays(1) -> "昨天"
+        else -> day.date.format(DateTimeFormatter.ofPattern("M月d日 EEEE", Locale.CHINA))
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(dateLabel, style = MaterialTheme.typography.bodyMedium, color = AccountMutedColor, modifier = Modifier.weight(1f))
+        Text("支出 ¥${day.expenseCents.centsToYuanText()}", style = MaterialTheme.typography.bodySmall, color = AccountMutedColor)
+    }
+}
+
+@Composable
+private fun TransactionRow(item: LedgerItemUi, onDelete: () -> Unit) {
+    val isExpense = item.type == LedgerRepository.TYPE_EXPENSE
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        if (maxWidth < 280.dp || fontScale >= 1.3f) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(item.merchant, style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f))
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = "删除${item.merchant}的流水", tint = AccountMutedColor, modifier = Modifier.size(18.dp))
+                    }
+                }
+                Text(item.categoryName + " · " + item.occurredAt.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm")),
+                    color = AccountMutedColor, style = MaterialTheme.typography.bodySmall)
+                if (item.note.isNotBlank()) Text(item.note, color = AccountMutedColor, style = MaterialTheme.typography.bodySmall)
+                Text("${if (isExpense) "−" else "+"}¥${item.amountCents.centsToYuanText()}",
+                    color = if (isExpense) MaterialTheme.colorScheme.onSurface else AccountIncomeColor,
+                    fontWeight = FontWeight.Normal, fontFamily = AccountSerif,
+                    style = MaterialTheme.typography.titleLarge)
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(item.merchant, style = MaterialTheme.typography.bodyLarge)
+                    Text(item.categoryName, color = AccountMutedColor, style = MaterialTheme.typography.bodySmall)
+                    if (item.note.isNotBlank()) Text(item.note, color = AccountMutedColor, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${if (isExpense) "−" else "+"}¥${item.amountCents.centsToYuanText()}",
+                        color = if (isExpense) MaterialTheme.colorScheme.onSurface else AccountIncomeColor,
+                        fontWeight = FontWeight.Normal, fontFamily = AccountSerif,
+                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 20.sp))
+                    Text(item.occurredAt.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm")),
+                        style = MaterialTheme.typography.bodySmall, color = AccountMutedColor)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = "删除${item.merchant}的流水", tint = AccountMutedColor, modifier = Modifier.size(18.dp))
+                }
+            }
         }
     }
 }

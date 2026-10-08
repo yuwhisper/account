@@ -9,19 +9,29 @@ struct RootView: View {
     @EnvironmentObject private var store: LedgerStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var presentedPending: PendingRoute?
+    @State private var selectedTab = 0
+    @AppStorage("ledgerAppearance", store: UserDefaults(suiteName: "group.com.yuwhisper.account")) private var appearance = "system"
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             LedgerScreen(presentedPending: $presentedPending)
-                .tabItem { Label("流水", systemImage: "list.bullet") }
+                .tabItem { Label("流水", systemImage: "list.bullet.rectangle") }
+                .tag(0)
             StatsScreen()
-                .tabItem { Label("统计", systemImage: "chart.bar") }
+                .tabItem { Label("统计", systemImage: "chart.bar.xaxis") }
+                .tag(1)
             CategoryScreen()
                 .tabItem { Label("分类", systemImage: "square.grid.2x2") }
+                .tag(2)
             SettingsScreen()
                 .tabItem { Label("设置", systemImage: "gearshape") }
+                .tag(3)
         }
-        .tint(LedgerTheme.pine)
+        .tint(LedgerTheme.rose)
+        .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
+        .toolbarBackground(LedgerTheme.surface, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
+        .sensoryFeedback(.selection, trigger: selectedTab)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { store.reload() }
         }
@@ -33,6 +43,7 @@ struct RootView: View {
         .sheet(item: $presentedPending) { route in
             ConfirmScreen(pendingId: route.id)
                 .environmentObject(store)
+                .ledgerSheet()
         }
     }
 }
